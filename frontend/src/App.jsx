@@ -7,10 +7,17 @@ import {
   Navigate,
   useLocation,
 } from "react-router-dom";
+
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
 import TechnicianDashboard from "./pages/TechnicianDashboard";
+import AdminDashboard from "./pages/AdminDashboard";
+import RegisterTests from "./pages/RegisterTests";
+import ActiveTests from "./pages/ActiveTests"; // ✅ NEW
+
+// ✅ Patient layout (sidebar + topbar + footer)
+import PatientLayout from "./components/PatientLayout";
 
 // Simple auth guard using localStorage
 const RequireAuth = ({ children, allowedRoles }) => {
@@ -31,7 +38,8 @@ const RequireAuth = ({ children, allowedRoles }) => {
 
   // If allowedRoles is given, check role
   if (allowedRoles && !allowedRoles.includes(user.role)) {
-    // If user is not allowed here, send them to patient dashboard by default
+    if (user.role === "admin") return <Navigate to="/admin" replace />;
+    if (user.role === "technician") return <Navigate to="/technician" replace />;
     return <Navigate to="/dashboard" replace />;
   }
 
@@ -46,22 +54,49 @@ function App() {
         <Route path="/" element={<Login />} />
         <Route path="/register" element={<Register />} />
 
-        {/* Patient dashboard (requires any logged-in user) */}
+        {/* ✅ Patient area (patient only) using shared layout */}
         <Route
-          path="/dashboard"
           element={
-            <RequireAuth>
-              <Dashboard />
+            <RequireAuth allowedRoles={["patient"]}>
+              <PatientLayout />
             </RequireAuth>
           }
-        />
+        >
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/register-tests" element={<RegisterTests />} />
+          <Route path="/active-tests" element={<ActiveTests />} /> {/* ✅ UPDATED */}
 
-        {/* Lab technician dashboard (only for role "technician") */}
+          {/* Optional placeholders */}
+          <Route
+            path="/reports"
+            element={<div className="max-w-6xl">Reports page (next)</div>}
+          />
+          <Route
+            path="/consult"
+            element={<div className="max-w-6xl">Consult doctor page (next)</div>}
+          />
+          <Route
+            path="/profile"
+            element={<div className="max-w-6xl">Edit profile page (next)</div>}
+          />
+        </Route>
+
+        {/* Lab technician dashboard */}
         <Route
           path="/technician"
           element={
             <RequireAuth allowedRoles={["technician"]}>
               <TechnicianDashboard />
+            </RequireAuth>
+          }
+        />
+
+        {/* Admin dashboard */}
+        <Route
+          path="/admin"
+          element={
+            <RequireAuth allowedRoles={["admin"]}>
+              <AdminDashboard />
             </RequireAuth>
           }
         />

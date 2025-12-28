@@ -17,6 +17,7 @@ const Login = () => {
     setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
   };
 
+  // ✅ Improved login submit with role routing (admin/technician/patient)
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
@@ -27,36 +28,41 @@ const Login = () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          email: form.email,
+          email: form.email.trim(),
           password: form.password,
         }),
       });
 
+      // Safer parsing (avoids crashes when backend returns non-JSON)
       const text = await res.text();
       let data = {};
       try {
         data = text ? JSON.parse(text) : {};
       } catch {
-        // non-JSON response
+        data = {};
       }
 
       if (!res.ok) {
-        throw new Error(data.message || text || "Login failed");
+        throw new Error(data.message || "Login failed");
+      }
+
+      if (!data.token || !data.user) {
+        throw new Error("Login response missing token or user details.");
       }
 
       // Save token + user
-      if (data.token) {
-        localStorage.setItem("token", data.token);
-      }
-      if (data.user) {
-        localStorage.setItem("user", JSON.stringify(data.user));
-      }
+      localStorage.setItem("token", data.token);
+      localStorage.setItem("user", JSON.stringify(data.user));
 
-      // Role-based navigation
-      if (data.user?.role === "technician") {
-        navigate("/technician"); // TechnicianDashboard route
+      // ✅ Role-based navigation
+      const role = (data.user.role || "").toLowerCase();
+
+      if (role === "admin") {
+        navigate("/admin");
+      } else if (role === "technician") {
+        navigate("/technician");
       } else {
-        navigate("/dashboard");  // Patient dashboard
+        navigate("/dashboard");
       }
     } catch (err) {
       setError(err.message || "Something went wrong.");
@@ -84,9 +90,11 @@ const Login = () => {
               <span className="h-2 w-2 rounded-full bg-blue-500"></span>
               Secure Lab Management
             </div>
+
             <h2 className="text-4xl xl:text-5xl font-semibold text-slate-900 leading-tight">
               Welcome to <span className="text-blue-600">Clinical</span>
             </h2>
+
             <p className="mt-4 text-sm xl:text-base text-slate-700 max-w-lg">
               Manage patients, tests, and lab reports in one secure platform.
               Fast, accurate, and designed for modern medical labs in Nepal.
@@ -98,10 +106,12 @@ const Login = () => {
               <p className="font-semibold text-sm mb-1">Real-time tracking</p>
               <p>Follow every sample from collection to report.</p>
             </div>
+
             <div className="rounded-2xl border border-sky-100 bg-white/90 p-4 shadow-sm">
               <p className="font-semibold text-sm mb-1">Secure records</p>
               <p>Encrypted patient profiles with Citizenship ID.</p>
             </div>
+
             <div className="rounded-2xl border border-cyan-100 bg-white/90 p-4 shadow-sm">
               <p className="font-semibold text-sm mb-1">Doctor access</p>
               <p>Instant access to lab reports & notes.</p>
@@ -129,6 +139,7 @@ const Login = () => {
               value={form.email}
               onChange={handleChange}
             />
+
             <Input
               label="Password"
               name="password"
@@ -154,9 +165,11 @@ const Login = () => {
                 />
                 <span>Keep me signed in</span>
               </label>
+
               <button
                 type="button"
                 className="font-medium text-blue-600 hover:text-blue-700"
+                onClick={() => alert("Forgot password feature coming soon!")}
               >
                 Forgot password?
               </button>
@@ -171,23 +184,6 @@ const Login = () => {
               {loading ? "Signing in..." : "Sign in"}
             </button>
           </form>
-
-          {/* Divider */}
-          <div className="mt-6 flex items-center gap-2 text-xs text-slate-400">
-            <span className="h-px flex-1 bg-slate-200" />
-            <span>or continue as</span>
-            <span className="h-px flex-1 bg-slate-200" />
-          </div>
-
-          {/* Buttons */}
-          <div className="mt-3 grid grid-cols-2 gap-3 text-xs">
-            <button className="rounded-xl border border-slate-200 bg-white px-3 py-2 font-medium text-slate-700 hover:border-blue-500 hover:text-blue-700 transition">
-              Patient
-            </button>
-            <button className="rounded-xl border border-slate-200 bg-white px-3 py-2 font-medium text-slate-700 hover:border-blue-500 hover:text-blue-700 transition">
-              Staff / Doctor
-            </button>
-          </div>
         </AuthCard>
       </div>
     </div>

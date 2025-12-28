@@ -11,7 +11,7 @@ router.post("/register", async (req, res) => {
   try {
     const { name, email, password, role, citizenshipId } = req.body;
 
-    console.log("Register body:", req.body); // debug log
+    console.log("Register body:", req.body);
 
     if (!name || !email || !password) {
       return res
@@ -19,9 +19,21 @@ router.post("/register", async (req, res) => {
         .json({ message: "Name, email and password are required." });
     }
 
-    const existing = await User.findOne({ email });
-    if (existing) {
+    //citizenshipId as unique
+    if (!citizenshipId) {
+      return res.status(400).json({ message: "Citizenship ID is required." });
+    }
+
+    const existingEmail = await User.findOne({ email });
+    if (existingEmail) {
       return res.status(400).json({ message: "Email is already registered." });
+    }
+
+    const existingCitizen = await User.findOne({ citizenshipId });
+    if (existingCitizen) {
+      return res
+        .status(400)
+        .json({ message: "Citizenship ID is already registered." });
     }
 
     const salt = await bcrypt.genSalt(10);
@@ -32,16 +44,17 @@ router.post("/register", async (req, res) => {
       email,
       passwordHash,
       role: role || "patient",
-      citizenshipId: citizenshipId || null,
+      citizenshipId, // store it
     });
 
     return res.status(201).json({
       message: "User registered successfully.",
       user: {
-        id: user._id.toString(),
+        id: user._id.toString(), // internal MongoDB id
         name: user.name,
         email: user.email,
         role: user.role,
+        citizenshipId: user.citizenshipId, //  return it
       },
     });
   } catch (err) {
@@ -55,15 +68,17 @@ router.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    console.log("Login body:", req.body); // debug log
+    console.log("Login body:", req.body);
 
     const user = await User.findOne({ email });
-    if (!user)
+    if (!user) {
       return res.status(400).json({ message: "Invalid email or password." });
+    }
 
     const isMatch = await bcrypt.compare(password, user.passwordHash);
-    if (!isMatch)
+    if (!isMatch) {
       return res.status(400).json({ message: "Invalid email or password." });
+    }
 
     const token = jwt.sign(
       { userId: user._id, role: user.role },
@@ -79,6 +94,7 @@ router.post("/login", async (req, res) => {
         name: user.name,
         email: user.email,
         role: user.role,
+        citizenshipId: user.citizenshipId, //  return it
       },
     });
   } catch (err) {
