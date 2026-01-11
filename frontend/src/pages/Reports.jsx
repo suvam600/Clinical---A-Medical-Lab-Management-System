@@ -1,25 +1,30 @@
-// src/pages/ActiveTests.jsx
+// src/pages/Reports.jsx
 import React, { useEffect, useMemo, useState } from "react";
 
-const pillClass = (status) => {
-  const base = "text-[11px] font-semibold px-3 py-1 rounded-full";
-  if (status === "Published") return `${base} bg-green-50 text-green-700`;
-  if (status === "Processing") return `${base} bg-blue-50 text-blue-700`;
-  if (status === "Sample Collected") return `${base} bg-amber-50 text-amber-700`;
-  return `${base} bg-slate-100 text-slate-700`;
-};
+function getToken() {
+  return localStorage.getItem("token") || "";
+}
+
+function makeSampleId(bookingId, itemId, idx) {
+  const shortB = String(bookingId || "").slice(-6).toUpperCase();
+  const shortT = String(itemId || "").slice(-4).toUpperCase();
+  return `RPT-${shortB}${shortT ? `-${shortT}` : ""}-${idx + 1}`;
+}
 
 function statusLabel(status) {
   if (status === "Published") return "Report Published";
   return status || "—";
 }
 
-function makeSampleId(bookingId, itemId, idx) {
-  const shortB = String(bookingId || "").slice(-6).toUpperCase();
-  const shortT = String(itemId || "").slice(-4).toUpperCase();
-  return `REQ-${shortB}${shortT ? `-${shortT}` : ""}-${idx + 1}`;
+function pillClass(status) {
+  const base = "text-[11px] font-semibold px-3 py-1 rounded-full";
+  if (status === "Published") return `${base} bg-green-50 text-green-700`;
+  if (status === "Processing") return `${base} bg-blue-50 text-blue-700`;
+  if (status === "Sample Collected") return `${base} bg-amber-50 text-amber-700`;
+  return `${base} bg-slate-100 text-slate-700`;
 }
 
+// Print/Download (Save as PDF through browser)
 function printReport(row) {
   if (!row) return;
 
@@ -106,7 +111,7 @@ function printReport(row) {
       </div>
 
       <div class="footer">
-        This report is generated electronically by Clinical Laboratory.
+        This report is generated electronically by Clinical Laboratory. If you find any issues, contact the lab administrator.
       </div>
     </body>
   </html>
@@ -114,7 +119,7 @@ function printReport(row) {
 
   const w = window.open("", "_blank", "width=900,height=700");
   if (!w) {
-    alert("Pop-up blocked. Please allow pop-ups to download/print.");
+    alert("Pop-up blocked. Please allow pop-ups to print/download the report.");
     return;
   }
   w.document.open();
@@ -124,21 +129,13 @@ function printReport(row) {
   w.print();
 }
 
-export default function ActiveTests() {
-  const user = useMemo(() => {
-    try {
-      return JSON.parse(localStorage.getItem("user") || "{}");
-    } catch {
-      return {};
-    }
-  }, []);
-
+export default function Reports() {
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
 
-  // modal
-  const [openRowKey, setOpenRowKey] = useState(null);
+  // report modal
+  const [reportOpen, setReportOpen] = useState(null); // rowKey
 
   useEffect(() => {
     const load = async () => {
@@ -146,19 +143,19 @@ export default function ActiveTests() {
         setLoading(true);
         setErr("");
 
-        const token = localStorage.getItem("token");
+        const token = getToken();
         const res = await fetch("/api/bookings/mine", {
           headers: { Authorization: `Bearer ${token}` },
         });
 
         const data = await res.json();
         if (!res.ok || !data.success) {
-          throw new Error(data.message || "Failed to load active tests");
+          throw new Error(data.message || "Failed to load reports");
         }
 
         setBookings(data.data || []);
       } catch (e) {
-        setErr(e.message);
+        setErr(e.message || "Failed to load reports");
       } finally {
         setLoading(false);
       }
@@ -167,53 +164,64 @@ export default function ActiveTests() {
     load();
   }, []);
 
-  // Flatten bookings -> list of tests for display
-  const tests = useMemo(() => {
+  const publishedReports = useMemo(() => {
     const out = [];
     for (const b of bookings) {
+      const createdAt = b.createdAt;
+      const patient = {
+        name: (JSON.parse(localStorage.getItem("user") || "{}")?.name) || "Patient",
+        citizenshipId:
+          (JSON.parse(localStorage.getItem("user") || "{}")?.citizenshipId) || "—",
+      };
+
       (b.tests || []).forEach((t, idx) => {
-        out.push({
-          rowKey: `${b._id}:${t._id || idx}`,
-          bookingId: b._id,
-          itemId: t._id,
-          createdAt: b.createdAt,
-          testName: t.name,
-          testPrice: t.price,
-          status: t.status || "Awaiting Collection",
-          result: t.result || "",
-          notes: t.notes || "",
-          publishedAt: t.publishedAt || null,
-          sampleId: makeSampleId(b._id, t._id, idx),
-          patientName: user?.name || "Patient",
-          citizenshipId: user?.citizenshipId || "—",
-          paymentStatus: b.paymentStatus,
-        });
+        if (t?.status === "Published") {
+          const rowKey = `${b._id}:${t._id || idx}`;
+          out.push({
+            rowKey,
+            bookingId: b._id,
+            itemId: t._id,
+            createdAt,
+            status: t.status,
+            testName: t.name,
+            price: t.price,
+            result: t.result || "",
+            notes: t.notes || "",
+            publishedAt: t.publishedAt || null,
+            sampleId: makeSampleId(b._id, t._id, idx),
+            patientName: patient.name,
+            citizenshipId: patient.citizenshipId,
+          });
+        }
       });
     }
-    // newest first
-    out.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    // newest published first
+    out.sort((a, b) => new Date(b.publishedAt || b.createdAt) - new Date(a.publishedAt || a.createdAt));
     return out;
-  }, [bookings, user]);
+  }, [bookings]);
 
-  const activeRow = useMemo(() => {
-    if (!openRowKey) return null;
-    return tests.find((t) => t.rowKey === openRowKey) || null;
-  }, [openRowKey, tests]);
+  const activeReportRow = useMemo(() => {
+    if (!reportOpen) return null;
+    return publishedReports.find((r) => r.rowKey === reportOpen) || null;
+  }, [reportOpen, publishedReports]);
 
   return (
     <div className="max-w-6xl">
       <div className="flex items-end justify-between mb-5">
         <div>
           <h1 className="text-2xl sm:text-3xl font-semibold text-slate-900">
-            Active tests
+            View reports
           </h1>
           <p className="text-sm text-slate-600 mt-1">
-            Track sample and processing status. View reports when published.
+            Download completed lab reports published by the technician.
           </p>
         </div>
 
         <div className="text-xs text-slate-500">
-          Total: <span className="font-semibold text-slate-900">{tests.length}</span>
+          Total:{" "}
+          <span className="font-semibold text-slate-900">
+            {publishedReports.length}
+          </span>
         </div>
       </div>
 
@@ -228,14 +236,18 @@ export default function ActiveTests() {
 
         {!loading && !err && (
           <>
-            {tests.length === 0 ? (
+            {publishedReports.length === 0 ? (
               <p className="text-sm text-slate-600">
-                No tests yet. Go to <span className="font-semibold">Register for tests</span>.
+                No published reports yet. Your reports will appear here after the lab technician publishes them.
               </p>
             ) : (
               <div className="space-y-3">
-                {tests.map((x) => {
-                  const dateText = x.createdAt ? new Date(x.createdAt).toLocaleString() : "";
+                {publishedReports.map((x) => {
+                  const dateText = x.publishedAt
+                    ? new Date(x.publishedAt).toLocaleString()
+                    : x.createdAt
+                      ? new Date(x.createdAt).toLocaleString()
+                      : "";
 
                   return (
                     <div
@@ -245,40 +257,30 @@ export default function ActiveTests() {
                       <div>
                         <p className="font-semibold text-slate-900">{x.testName}</p>
                         <p className="text-xs text-slate-500 mt-1">
-                          Request ID:{" "}
-                          <span className="font-medium text-slate-700">{x.sampleId}</span>
+                          Report ID:{" "}
+                          <span className="font-medium text-slate-700">
+                            {x.sampleId}
+                          </span>
                           {dateText ? <span className="ml-2">• {dateText}</span> : null}
-                        </p>
-                        <p className="text-xs text-slate-500 mt-1">
-                          Payment:{" "}
-                          <span className="font-medium text-slate-700">{x.paymentStatus}</span>
                         </p>
                       </div>
 
                       <div className="flex items-center justify-between sm:justify-end gap-3">
-                        <div className="text-right">
-                          <p className="text-xs text-slate-500">Price</p>
-                          <p className="font-bold text-slate-900">Rs. {x.testPrice}</p>
-                        </div>
-
                         <span className={pillClass(x.status)}>{statusLabel(x.status)}</span>
 
-                        {x.status === "Published" ? (
-                          <>
-                            <button
-                              className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm hover:bg-slate-50"
-                              onClick={() => setOpenRowKey(x.rowKey)}
-                            >
-                              View
-                            </button>
-                            <button
-                              className="rounded-xl bg-blue-600 text-white px-4 py-2 text-sm hover:bg-blue-700"
-                              onClick={() => printReport(x)}
-                            >
-                              Download
-                            </button>
-                          </>
-                        ) : null}
+                        <button
+                          className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm hover:bg-slate-50"
+                          onClick={() => setReportOpen(x.rowKey)}
+                        >
+                          View
+                        </button>
+
+                        <button
+                          className="rounded-xl bg-blue-600 text-white px-4 py-2 text-sm hover:bg-blue-700"
+                          onClick={() => printReport(x)}
+                        >
+                          Download
+                        </button>
                       </div>
                     </div>
                   );
@@ -289,12 +291,12 @@ export default function ActiveTests() {
         )}
       </div>
 
-      {/* View report modal (only for Published) */}
-      {openRowKey && activeRow ? (
+      {/* Report modal */}
+      {reportOpen && activeReportRow ? (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4"
           onMouseDown={(e) => {
-            if (e.target === e.currentTarget) setOpenRowKey(null);
+            if (e.target === e.currentTarget) setReportOpen(null);
           }}
         >
           <div className="w-full max-w-3xl rounded-2xl bg-white shadow-xl border border-slate-200 overflow-hidden">
@@ -302,24 +304,26 @@ export default function ActiveTests() {
               <div>
                 <p className="text-sm font-semibold text-slate-900">Lab Report</p>
                 <p className="text-xs text-slate-500 mt-1">
-                  {activeRow.sampleId} • {activeRow.testName}
+                  {activeReportRow.sampleId} • {activeReportRow.testName}
                 </p>
                 <p className="text-xs text-slate-500 mt-1">
                   Published:{" "}
-                  {activeRow.publishedAt ? new Date(activeRow.publishedAt).toLocaleString() : "—"}
+                  {activeReportRow.publishedAt
+                    ? new Date(activeReportRow.publishedAt).toLocaleString()
+                    : "—"}
                 </p>
               </div>
 
               <div className="flex items-center gap-2">
                 <button
                   className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm hover:bg-slate-50"
-                  onClick={() => printReport(activeRow)}
+                  onClick={() => printReport(activeReportRow)}
                 >
                   Print / Save PDF
                 </button>
                 <button
                   className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm hover:bg-slate-50"
-                  onClick={() => setOpenRowKey(null)}
+                  onClick={() => setReportOpen(null)}
                 >
                   Close
                 </button>
@@ -330,27 +334,33 @@ export default function ActiveTests() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="rounded-2xl border border-slate-200 bg-slate-50/40 p-4">
                   <p className="text-xs text-slate-500">Patient Name</p>
-                  <p className="text-sm font-semibold text-slate-900 mt-1">{activeRow.patientName}</p>
+                  <p className="text-sm font-semibold text-slate-900 mt-1">
+                    {activeReportRow.patientName}
+                  </p>
                 </div>
                 <div className="rounded-2xl border border-slate-200 bg-slate-50/40 p-4">
                   <p className="text-xs text-slate-500">Citizenship ID</p>
-                  <p className="text-sm font-semibold text-slate-900 mt-1">{activeRow.citizenshipId}</p>
+                  <p className="text-sm font-semibold text-slate-900 mt-1">
+                    {activeReportRow.citizenshipId}
+                  </p>
                 </div>
               </div>
 
               <div className="rounded-2xl border border-slate-200 bg-white p-4">
                 <div className="flex items-center justify-between">
                   <p className="text-sm font-semibold text-slate-900">Test Details</p>
-                  <span className={pillClass(activeRow.status)}>{statusLabel(activeRow.status)}</span>
+                  <span className={pillClass(activeReportRow.status)}>
+                    {statusLabel(activeReportRow.status)}
+                  </span>
                 </div>
                 <div className="mt-2 text-sm text-slate-700">
                   <div>
                     <span className="text-slate-500">Report ID:</span>{" "}
-                    <span className="font-semibold">{activeRow.sampleId}</span>
+                    <span className="font-semibold">{activeReportRow.sampleId}</span>
                   </div>
                   <div className="mt-1">
                     <span className="text-slate-500">Test:</span>{" "}
-                    <span className="font-semibold">{activeRow.testName}</span>
+                    <span className="font-semibold">{activeReportRow.testName}</span>
                   </div>
                 </div>
               </div>
@@ -358,16 +368,20 @@ export default function ActiveTests() {
               <div className="rounded-2xl border border-slate-200 bg-white p-4">
                 <p className="text-sm font-semibold text-slate-900">Result</p>
                 <pre className="mt-2 whitespace-pre-wrap text-sm text-slate-800">
-                  {activeRow.result || "—"}
+                  {activeReportRow.result || "—"}
                 </pre>
               </div>
 
               <div className="rounded-2xl border border-slate-200 bg-white p-4">
                 <p className="text-sm font-semibold text-slate-900">Notes</p>
                 <pre className="mt-2 whitespace-pre-wrap text-sm text-slate-800">
-                  {activeRow.notes || "—"}
+                  {activeReportRow.notes || "—"}
                 </pre>
               </div>
+
+              <p className="text-[12px] text-slate-500">
+                This report is generated electronically by Clinical Laboratory.
+              </p>
             </div>
           </div>
         </div>

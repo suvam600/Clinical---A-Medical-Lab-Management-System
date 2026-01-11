@@ -14,12 +14,11 @@ import Dashboard from "./pages/Dashboard";
 import TechnicianDashboard from "./pages/TechnicianDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
 import RegisterTests from "./pages/RegisterTests";
-import ActiveTests from "./pages/ActiveTests"; // ✅ NEW
+import ActiveTests from "./pages/ActiveTests";
+import Reports from "./pages/Reports"; 
 
-// ✅ Patient layout (sidebar + topbar + footer)
 import PatientLayout from "./components/PatientLayout";
 
-// Simple auth guard using localStorage
 const RequireAuth = ({ children, allowedRoles }) => {
   const location = useLocation();
   const storedUser = localStorage.getItem("user");
@@ -31,12 +30,10 @@ const RequireAuth = ({ children, allowedRoles }) => {
     user = null;
   }
 
-  // Not logged in → send to login
   if (!user) {
     return <Navigate to="/" state={{ from: location }} replace />;
   }
 
-  // If allowedRoles is given, check role
   if (allowedRoles && !allowedRoles.includes(user.role)) {
     if (user.role === "admin") return <Navigate to="/admin" replace />;
     if (user.role === "technician") return <Navigate to="/technician" replace />;
@@ -50,11 +47,9 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Public routes */}
         <Route path="/" element={<Login />} />
         <Route path="/register" element={<Register />} />
 
-        {/* ✅ Patient area (patient only) using shared layout */}
         <Route
           element={
             <RequireAuth allowedRoles={["patient"]}>
@@ -64,13 +59,11 @@ function App() {
         >
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/register-tests" element={<RegisterTests />} />
-          <Route path="/active-tests" element={<ActiveTests />} /> {/* ✅ UPDATED */}
+          <Route path="/active-tests" element={<ActiveTests />} />
 
-          {/* Optional placeholders */}
-          <Route
-            path="/reports"
-            element={<div className="max-w-6xl">Reports page (next)</div>}
-          />
+          {/*  REAL Reports page */}
+          <Route path="/reports" element={<Reports />} />
+
           <Route
             path="/consult"
             element={<div className="max-w-6xl">Consult doctor page (next)</div>}
@@ -81,7 +74,6 @@ function App() {
           />
         </Route>
 
-        {/* Lab technician dashboard */}
         <Route
           path="/technician"
           element={
@@ -91,7 +83,6 @@ function App() {
           }
         />
 
-        {/* Admin dashboard */}
         <Route
           path="/admin"
           element={
@@ -101,7 +92,6 @@ function App() {
           }
         />
 
-        {/* Fallback route */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

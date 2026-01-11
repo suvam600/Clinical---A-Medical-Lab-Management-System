@@ -4,11 +4,15 @@ import { useNavigate } from "react-router-dom";
 
 const statusPill = (status) => {
   const base = "text-[11px] font-semibold px-3 py-1 rounded-full";
-  if (status === "Booked") return `${base} bg-slate-100 text-slate-700`;
-  if (status === "Sample Collected") return `${base} bg-amber-50 text-amber-700`;
+  if (status === "Published") return `${base} bg-green-50 text-green-700`;
   if (status === "Processing") return `${base} bg-blue-50 text-blue-700`;
-  if (status === "Report Published") return `${base} bg-green-50 text-green-700`;
+  if (status === "Sample Collected") return `${base} bg-amber-50 text-amber-700`;
   return `${base} bg-slate-100 text-slate-700`;
+};
+
+const statusLabel = (status) => {
+  if (status === "Published") return "Report Published";
+  return status || "—";
 };
 
 const Dashboard = () => {
@@ -53,7 +57,7 @@ const Dashboard = () => {
     loadBookings();
   }, []);
 
-  // Flatten bookings -> tests
+  // Flatten bookings -> tests (per-test status)
   const activeTests = useMemo(() => {
     const out = [];
     for (const b of bookings) {
@@ -61,17 +65,17 @@ const Dashboard = () => {
         out.push({
           bookingId: b._id,
           createdAt: b.createdAt,
-          bookingStatus: b.bookingStatus,
           testName: t.name,
+          status: t.status || "Awaiting Collection",
         });
       }
     }
-    // newest first
     out.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
     return out;
   }, [bookings]);
 
   const latestTwo = activeTests.slice(0, 2);
+  const publishedCount = activeTests.filter((t) => t.status === "Published").length;
 
   return (
     <div className="max-w-6xl">
@@ -105,7 +109,7 @@ const Dashboard = () => {
             >
               <p className="text-xs font-semibold text-slate-900">View reports</p>
               <p className="text-[11px] text-slate-500 mt-1">
-                Download completed reports
+                Download completed reports ({publishedCount})
               </p>
             </button>
 
@@ -185,9 +189,18 @@ const Dashboard = () => {
                         Request ID: #{shortId}
                       </p>
                     </div>
-                    <span className={statusPill(x.bookingStatus)}>
-                      {x.bookingStatus}
-                    </span>
+
+                    <div className="flex items-center gap-2">
+                      <span className={statusPill(x.status)}>{statusLabel(x.status)}</span>
+                      {x.status === "Published" ? (
+                        <button
+                          className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs hover:bg-slate-50"
+                          onClick={() => navigate("/reports")}
+                        >
+                          View
+                        </button>
+                      ) : null}
+                    </div>
                   </li>
                 );
               })}
