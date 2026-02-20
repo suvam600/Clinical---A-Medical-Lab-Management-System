@@ -11,7 +11,9 @@ router.get("/", async (req, res) => {
     const tests = await Test.find({ isActive: true }).sort({ name: 1 });
     return res.json({ success: true, data: tests });
   } catch (err) {
-    return res.status(500).json({ success: false, message: "Failed to load tests" });
+    return res
+      .status(500)
+      .json({ success: false, message: "Failed to load tests" });
   }
 });
 
@@ -21,7 +23,73 @@ router.get("/all", authRequired, requireRole("admin"), async (req, res) => {
     const tests = await Test.find().sort({ createdAt: -1 });
     return res.json({ success: true, data: tests });
   } catch (err) {
-    return res.status(500).json({ success: false, message: "Failed to load tests" });
+    return res
+      .status(500)
+      .json({ success: false, message: "Failed to load tests" });
+  }
+});
+
+// ✅ ADMIN: ADD a new test
+router.post("/", authRequired, requireRole("admin"), async (req, res) => {
+  try {
+    const { name, price, sampleType, turnaroundTime, isActive } = req.body;
+
+    if (!name || price === undefined || !sampleType || !turnaroundTime) {
+      return res.status(400).json({
+        success: false,
+        message: "name, price, sampleType, turnaroundTime are required",
+      });
+    }
+
+    const created = await Test.create({
+      name: String(name).trim(),
+      price: Number(price),
+      sampleType: String(sampleType).trim(),
+      turnaroundTime: String(turnaroundTime).trim(),
+      isActive: typeof isActive === "boolean" ? isActive : true,
+    });
+
+    return res.json({
+      success: true,
+      message: "Test added successfully",
+      data: created,
+    });
+  } catch (err) {
+    return res
+      .status(500)
+      .json({ success: false, message: "Failed to add test" });
+  }
+});
+
+// ✅ ADMIN: UPDATE a test
+router.put("/:id", authRequired, requireRole("admin"), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, price, sampleType, turnaroundTime, isActive } = req.body;
+
+    const test = await Test.findById(id);
+    if (!test) {
+      return res.status(404).json({ success: false, message: "Test not found" });
+    }
+
+    if (name !== undefined) test.name = String(name).trim();
+    if (price !== undefined) test.price = Number(price);
+    if (sampleType !== undefined) test.sampleType = String(sampleType).trim();
+    if (turnaroundTime !== undefined)
+      test.turnaroundTime = String(turnaroundTime).trim();
+    if (typeof isActive === "boolean") test.isActive = isActive;
+
+    await test.save();
+
+    return res.json({
+      success: true,
+      message: "Test updated successfully",
+      data: test,
+    });
+  } catch (err) {
+    return res
+      .status(500)
+      .json({ success: false, message: "Failed to update test" });
   }
 });
 
@@ -37,11 +105,13 @@ router.delete("/:id", authRequired, requireRole("admin"), async (req, res) => {
 
     return res.json({ success: true, message: "Test removed successfully" });
   } catch (err) {
-    return res.status(500).json({ success: false, message: "Failed to remove test" });
+    return res
+      .status(500)
+      .json({ success: false, message: "Failed to remove test" });
   }
 });
 
-// ✅ (OPTIONAL but recommended) ADMIN: Disable/Enable instead of delete
+// ✅ (OPTIONAL) ADMIN: Disable/Enable instead of delete
 router.patch("/:id/toggle", authRequired, requireRole("admin"), async (req, res) => {
   try {
     const { id } = req.params;
@@ -60,7 +130,9 @@ router.patch("/:id/toggle", authRequired, requireRole("admin"), async (req, res)
       data: test,
     });
   } catch (err) {
-    return res.status(500).json({ success: false, message: "Failed to update test" });
+    return res
+      .status(500)
+      .json({ success: false, message: "Failed to update test" });
   }
 });
 

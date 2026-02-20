@@ -47,7 +47,10 @@ async function apiFetch(url, options = {}) {
 
 function formatTime(iso) {
   try {
-    return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    return new Date(iso).toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
   } catch {
     return "";
   }
@@ -64,7 +67,8 @@ function statusPill(status) {
     "inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold";
   if (status === "Published") return `${base} bg-emerald-50 text-emerald-700`;
   if (status === "Processing") return `${base} bg-blue-50 text-blue-700`;
-  if (status === "Sample Collected") return `${base} bg-violet-50 text-violet-700`;
+  if (status === "Sample Collected")
+    return `${base} bg-violet-50 text-violet-700`;
   return `${base} bg-amber-50 text-amber-700`;
 }
 
@@ -86,11 +90,16 @@ export default function TechnicianDashboard() {
   };
 
   const [queueRows, setQueueRows] = useState([]);
-  const [recent, setRecent] = useState([{ id: "none", text: "No recent activity yet." }]);
+  const [recent, setRecent] = useState([
+    { id: "none", text: "No recent activity yet." },
+  ]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   const [refreshKey, setRefreshKey] = useState(0);
+
+  // ✅ NEW: Published search (Citizenship ID)
+  const [publishedSearch, setPublishedSearch] = useState("");
 
   // Update modal state
   const [updateOpen, setUpdateOpen] = useState(null); // rowKey
@@ -111,7 +120,10 @@ export default function TechnicianDashboard() {
       setLoading(true);
       setError("");
 
-      const data = await apiFetch("/api/bookings/queue", { method: "GET" });
+      const data = await apiFetch("/api/bookings/queue?includePublished=1", {
+        method: "GET",
+      });
+
       const bookings = data?.success ? data.data : [];
 
       const rows = [];
@@ -120,7 +132,8 @@ export default function TechnicianDashboard() {
         const patientName = patient?.name || "Unknown";
         const citizenshipId = patient?.citizenshipId || "—";
 
-        const createdAt = b.createdAt || b.updatedAt || new Date().toISOString();
+        const createdAt =
+          b.createdAt || b.updatedAt || new Date().toISOString();
 
         (b.tests || []).forEach((t, idx) => {
           const status = t?.status || "Awaiting Collection";
@@ -152,14 +165,18 @@ export default function TechnicianDashboard() {
         });
       });
 
-      rows.sort((a, b) => new Date(b.bookingCreatedAt) - new Date(a.bookingCreatedAt));
+      rows.sort(
+        (a, b) => new Date(b.bookingCreatedAt) - new Date(a.bookingCreatedAt)
+      );
       setQueueRows(rows);
 
       const latest = rows.slice(0, 5).map((r) => ({
         id: `${r.rowKey}:${Date.now()}`,
         text: `Queue item: ${r.sampleId} → ${r.status} (${r.testName})`,
       }));
-      setRecent(latest.length ? latest : [{ id: "none", text: "No recent activity yet." }]);
+      setRecent(
+        latest.length ? latest : [{ id: "none", text: "No recent activity yet." }]
+      );
     } catch (e) {
       setError(e.message || "Failed to load queue.");
       setQueueRows([]);
@@ -179,6 +196,15 @@ export default function TechnicianDashboard() {
     [queueRows]
   );
 
+  // ✅ NEW: filter published by citizenshipId
+  const filteredPublishedRows = useMemo(() => {
+    const q = String(publishedSearch || "").trim().toLowerCase();
+    if (!q) return publishedRows;
+    return publishedRows.filter((r) =>
+      String(r.citizenshipId || "").toLowerCase().includes(q)
+    );
+  }, [publishedRows, publishedSearch]);
+
   const activeQueueRows = useMemo(
     () => queueRows.filter((r) => (r.status || "") !== "Published"),
     [queueRows]
@@ -186,7 +212,9 @@ export default function TechnicianDashboard() {
 
   const counts = useMemo(() => {
     const testsInQueue = activeQueueRows.length;
-    const pendingProcessing = activeQueueRows.filter((r) => r.status === "Processing").length;
+    const pendingProcessing = activeQueueRows.filter(
+      (r) => r.status === "Processing"
+    ).length;
     return { testsInQueue, pendingProcessing };
   }, [activeQueueRows]);
 
@@ -216,20 +244,28 @@ export default function TechnicianDashboard() {
       setError("");
       setUpdatingRowKey(row.rowKey);
 
-      await apiFetch(`/api/bookings/${row.bookingId}/tests/${row.itemId}/status`, {
-        method: "PATCH",
-        body: JSON.stringify({ status: updateStatus }),
-      });
+      await apiFetch(
+        `/api/bookings/${row.bookingId}/tests/${row.itemId}/status`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ status: updateStatus }),
+        }
+      );
 
       // optimistic UI update (so it feels instant)
       setQueueRows((prev) =>
-        prev.map((r) => (r.rowKey === row.rowKey ? { ...r, status: updateStatus } : r))
+        prev.map((r) =>
+          r.rowKey === row.rowKey ? { ...r, status: updateStatus } : r
+        )
       );
 
       // add to recent activity
       setRecent((prev) => {
         const next = [
-          { id: `${row.rowKey}:${Date.now()}`, text: `Updated: ${row.sampleId} → ${updateStatus}` },
+          {
+            id: `${row.rowKey}:${Date.now()}`,
+            text: `Updated: ${row.sampleId} → ${updateStatus}`,
+          },
           ...(prev ? prev.filter((x) => x?.id !== "none") : []),
         ];
         return next.slice(0, 5);
@@ -283,10 +319,13 @@ export default function TechnicianDashboard() {
       setError("");
       setSavingResultRowKey(row.rowKey);
 
-      await apiFetch(`/api/bookings/${row.bookingId}/tests/${row.itemId}/result`, {
-        method: "PUT",
-        body: JSON.stringify({ result: resultText, notes: resultNotes }),
-      });
+      await apiFetch(
+        `/api/bookings/${row.bookingId}/tests/${row.itemId}/result`,
+        {
+          method: "PUT",
+          body: JSON.stringify({ result: resultText, notes: resultNotes }),
+        }
+      );
 
       // optimistic UI update
       setQueueRows((prev) =>
@@ -305,7 +344,10 @@ export default function TechnicianDashboard() {
 
       setRecent((prev) => {
         const next = [
-          { id: `${row.rowKey}:${Date.now()}`, text: `Published: ${row.sampleId} (Result saved)` },
+          {
+            id: `${row.rowKey}:${Date.now()}`,
+            text: `Published: ${row.sampleId} (Result saved)`,
+          },
           ...(prev ? prev.filter((x) => x?.id !== "none") : []),
         ];
         return next.slice(0, 5);
@@ -492,7 +534,9 @@ export default function TechnicianDashboard() {
                     </div>
 
                     <div className="rounded-xl border border-slate-100 bg-white p-3">
-                      <p className="text-xs text-slate-500">Pending processing</p>
+                      <p className="text-xs text-slate-500">
+                        Pending processing
+                      </p>
                       <p className="text-xl font-semibold text-slate-900">
                         {counts.pendingProcessing}
                       </p>
@@ -590,7 +634,8 @@ export default function TechnicianDashboard() {
                       Test Queue
                     </p>
                     <p className="text-xs text-slate-500 mt-1">
-                      Update status: Awaiting → Collected → Processing → Published
+                      Update status: Awaiting → Collected → Processing →
+                      Published
                     </p>
                   </div>
 
@@ -606,25 +651,43 @@ export default function TechnicianDashboard() {
                   <table className="w-full min-w-full text-sm">
                     <thead className="bg-white">
                       <tr className="border-t border-slate-200 text-xs text-slate-500">
-                        <th className="text-left font-semibold px-6 py-3">Sample ID</th>
-                        <th className="text-left font-semibold px-6 py-3">Patient (Citizenship ID)</th>
-                        <th className="text-left font-semibold px-6 py-3">Test</th>
-                        <th className="text-left font-semibold px-6 py-3">Time</th>
-                        <th className="text-left font-semibold px-6 py-3">Status</th>
-                        <th className="text-right font-semibold px-6 py-3">Actions</th>
+                        <th className="text-left font-semibold px-6 py-3">
+                          Sample ID
+                        </th>
+                        <th className="text-left font-semibold px-6 py-3">
+                          Patient (Citizenship ID)
+                        </th>
+                        <th className="text-left font-semibold px-6 py-3">
+                          Test
+                        </th>
+                        <th className="text-left font-semibold px-6 py-3">
+                          Time
+                        </th>
+                        <th className="text-left font-semibold px-6 py-3">
+                          Status
+                        </th>
+                        <th className="text-right font-semibold px-6 py-3">
+                          Actions
+                        </th>
                       </tr>
                     </thead>
 
                     <tbody className="bg-white">
                       {loading ? (
                         <tr>
-                          <td className="px-6 py-4 text-slate-500" colSpan={6}>
+                          <td
+                            className="px-6 py-4 text-slate-500"
+                            colSpan={6}
+                          >
                             Loading queue…
                           </td>
                         </tr>
                       ) : activeQueueRows.length === 0 ? (
                         <tr>
-                          <td className="px-6 py-4 text-slate-500" colSpan={6}>
+                          <td
+                            className="px-6 py-4 text-slate-500"
+                            colSpan={6}
+                          >
                             No pending tests.
                           </td>
                         </tr>
@@ -639,18 +702,26 @@ export default function TechnicianDashboard() {
                             </td>
 
                             <td className="px-6 py-4">
-                              <div className="text-slate-900">{r.patientName}</div>
-                              <div className="text-xs text-slate-500">{r.citizenshipId}</div>
+                              <div className="text-slate-900">
+                                {r.patientName}
+                              </div>
+                              <div className="text-xs text-slate-500">
+                                {r.citizenshipId}
+                              </div>
                             </td>
 
-                            <td className="px-6 py-4 text-slate-900">{r.testName}</td>
+                            <td className="px-6 py-4 text-slate-900">
+                              {r.testName}
+                            </td>
 
                             <td className="px-6 py-4 text-slate-600 whitespace-nowrap">
                               {r.timeLabel}
                             </td>
 
                             <td className="px-6 py-4">
-                              <span className={statusPill(r.status)}>{r.status}</span>
+                              <span className={statusPill(r.status)}>
+                                {r.status}
+                              </span>
                             </td>
 
                             <td className="px-6 py-4">
@@ -660,7 +731,9 @@ export default function TechnicianDashboard() {
                                   onClick={() => openUpdate(r)}
                                   disabled={updatingRowKey === r.rowKey}
                                 >
-                                  {updatingRowKey === r.rowKey ? "Updating…" : "Update"}
+                                  {updatingRowKey === r.rowKey
+                                    ? "Updating…"
+                                    : "Update"}
                                 </button>
 
                                 <button
@@ -685,7 +758,7 @@ export default function TechnicianDashboard() {
                 </div>
               </section>
 
-              {/* Published tests table */}
+              {/* ✅ Published tests table (time removed + search added) */}
               <section
                 id="published-tests"
                 className="mt-6 rounded-2xl bg-white/80 border border-slate-200 shadow-sm overflow-hidden"
@@ -700,42 +773,67 @@ export default function TechnicianDashboard() {
                     </p>
                   </div>
 
-                  <button
-                    className="text-sm text-blue-600 hover:text-blue-700"
-                    onClick={() => setRefreshKey((k) => k + 1)}
-                  >
-                    Refresh
-                  </button>
+                  <div className="flex items-center gap-3">
+                    <input
+                      value={publishedSearch}
+                      onChange={(e) => setPublishedSearch(e.target.value)}
+                      placeholder="Search by Citizenship ID..."
+                      className="w-64 max-w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-200"
+                    />
+
+                    <button
+                      className="text-sm text-blue-600 hover:text-blue-700"
+                      onClick={() => setRefreshKey((k) => k + 1)}
+                    >
+                      Refresh
+                    </button>
+                  </div>
                 </div>
 
                 <div className="w-full overflow-auto">
                   <table className="w-full min-w-full text-sm">
                     <thead className="bg-white">
                       <tr className="border-t border-slate-200 text-xs text-slate-500">
-                        <th className="text-left font-semibold px-6 py-3">Sample ID</th>
-                        <th className="text-left font-semibold px-6 py-3">Patient (Citizenship ID)</th>
-                        <th className="text-left font-semibold px-6 py-3">Test</th>
-                        <th className="text-left font-semibold px-6 py-3">Time</th>
-                        <th className="text-left font-semibold px-6 py-3">Status</th>
-                        <th className="text-right font-semibold px-6 py-3">Actions</th>
+                        <th className="text-left font-semibold px-6 py-3">
+                          Sample ID
+                        </th>
+                        <th className="text-left font-semibold px-6 py-3">
+                          Patient (Citizenship ID)
+                        </th>
+                        <th className="text-left font-semibold px-6 py-3">
+                          Test
+                        </th>
+                        {/* ✅ removed Time column */}
+                        <th className="text-left font-semibold px-6 py-3">
+                          Status
+                        </th>
+                        <th className="text-right font-semibold px-6 py-3">
+                          Actions
+                        </th>
                       </tr>
                     </thead>
 
                     <tbody className="bg-white">
                       {loading ? (
                         <tr>
-                          <td className="px-6 py-4 text-slate-500" colSpan={6}>
+                          <td
+                            className="px-6 py-4 text-slate-500"
+                            colSpan={5}
+                          >
                             Loading published tests…
                           </td>
                         </tr>
-                      ) : publishedRows.length === 0 ? (
+                      ) : filteredPublishedRows.length === 0 ? (
                         <tr>
-                          <td className="px-6 py-4 text-slate-500" colSpan={6}>
+                          <td
+                            className="px-6 py-4 text-slate-500"
+                            colSpan={5}
+                          >
                             No published tests yet.
                           </td>
                         </tr>
                       ) : (
-                        publishedRows.map((r) => (
+                        filteredPublishedRows.map((r) => (
                           <tr
                             key={r.rowKey}
                             className="border-t border-slate-100 hover:bg-slate-50/40"
@@ -745,18 +843,23 @@ export default function TechnicianDashboard() {
                             </td>
 
                             <td className="px-6 py-4">
-                              <div className="text-slate-900">{r.patientName}</div>
-                              <div className="text-xs text-slate-500">{r.citizenshipId}</div>
+                              <div className="text-slate-900">
+                                {r.patientName}
+                              </div>
+                              <div className="text-xs text-slate-500">
+                                {r.citizenshipId}
+                              </div>
                             </td>
 
-                            <td className="px-6 py-4 text-slate-900">{r.testName}</td>
-
-                            <td className="px-6 py-4 text-slate-600 whitespace-nowrap">
-                              {r.timeLabel}
+                            <td className="px-6 py-4 text-slate-900">
+                              {r.testName}
                             </td>
 
+                            {/* ✅ removed Time cell */}
                             <td className="px-6 py-4">
-                              <span className={statusPill(r.status)}>{r.status}</span>
+                              <span className={statusPill(r.status)}>
+                                {r.status}
+                              </span>
                             </td>
 
                             <td className="px-6 py-4">
@@ -791,7 +894,9 @@ export default function TechnicianDashboard() {
         >
           <div className="w-full max-w-md rounded-2xl bg-white shadow-xl border border-slate-200 overflow-hidden">
             <div className="px-5 py-4 border-b border-slate-100">
-              <p className="text-sm font-semibold text-slate-900">Update status</p>
+              <p className="text-sm font-semibold text-slate-900">
+                Update status
+              </p>
               <p className="text-xs text-slate-500 mt-1">
                 {activeRow.sampleId} • {activeRow.testName}
               </p>
@@ -800,7 +905,9 @@ export default function TechnicianDashboard() {
             <div className="px-5 py-4 space-y-3">
               <div className="text-sm text-slate-500">Current</div>
               <div className="flex items-center justify-between">
-                <span className={statusPill(activeRow.status)}>{activeRow.status}</span>
+                <span className={statusPill(activeRow.status)}>
+                  {activeRow.status}
+                </span>
                 <span className="text-xs text-slate-500">
                   {activeRow.patientName} ({activeRow.citizenshipId})
                 </span>
@@ -857,7 +964,9 @@ export default function TechnicianDashboard() {
             <div className="px-5 py-4 border-b border-slate-100 flex items-start justify-between gap-4">
               <div>
                 <p className="text-sm font-semibold text-slate-900">
-                  {activeResultRow.status === "Published" ? "View Result" : "Enter Result"}
+                  {activeResultRow.status === "Published"
+                    ? "View Result"
+                    : "Enter Result"}
                 </p>
                 <p className="text-xs text-slate-500 mt-1">
                   {activeResultRow.sampleId} • {activeResultRow.testName}
@@ -889,7 +998,9 @@ export default function TechnicianDashboard() {
               </div>
 
               <div>
-                <label className="text-sm text-slate-500">Notes (optional)</label>
+                <label className="text-sm text-slate-500">
+                  Notes (optional)
+                </label>
                 <textarea
                   className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-200"
                   rows={3}
@@ -910,9 +1021,7 @@ export default function TechnicianDashboard() {
                     You can publish only when status is <b>Processing</b>.
                   </p>
                 ) : (
-                  <p className="text-[12px] text-slate-500">
-                    Report is published.
-                  </p>
+                  <p className="text-[12px] text-slate-500">Report is published.</p>
                 )}
               </div>
             </div>
@@ -932,7 +1041,9 @@ export default function TechnicianDashboard() {
                   onClick={() => saveResult(activeResultRow)}
                   disabled={savingResultRowKey === activeResultRow.rowKey}
                 >
-                  {savingResultRowKey === activeResultRow.rowKey ? "Publishing…" : "Save & Publish"}
+                  {savingResultRowKey === activeResultRow.rowKey
+                    ? "Publishing…"
+                    : "Save & Publish"}
                 </button>
               ) : null}
             </div>
@@ -997,8 +1108,12 @@ export default function TechnicianDashboard() {
 
               <div className="rounded-2xl border border-slate-200 bg-white p-4">
                 <div className="flex items-center justify-between">
-                  <p className="text-sm font-semibold text-slate-900">Test Details</p>
-                  <span className={statusPill(activeReportRow.status)}>{activeReportRow.status}</span>
+                  <p className="text-sm font-semibold text-slate-900">
+                    Test Details
+                  </p>
+                  <span className={statusPill(activeReportRow.status)}>
+                    {activeReportRow.status}
+                  </span>
                 </div>
                 <div className="mt-2 text-sm text-slate-700">
                   <div>

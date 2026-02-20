@@ -1,3 +1,6 @@
+// src/pages/AdminDashboard.jsx
+// Fix: Activities table layout (bigger, cleaner, better spacing, no cramped status pills)
+
 import React, { useEffect, useMemo, useState } from "react";
 
 const API_BASE = "/api";
@@ -29,10 +32,51 @@ function RolePill({ role }) {
   );
 }
 
+function StatusPill({ status }) {
+  const s = String(status || "").trim();
+  const base =
+    "inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold border whitespace-nowrap";
+  if (s === "Published")
+    return (
+      <span className={`${base} bg-emerald-50 text-emerald-700 border-emerald-200`}>
+        Published
+      </span>
+    );
+  if (s === "Processing")
+    return (
+      <span className={`${base} bg-blue-50 text-blue-700 border-blue-200`}>
+        Processing
+      </span>
+    );
+  if (s === "Sample Collected")
+    return (
+      <span className={`${base} bg-violet-50 text-violet-700 border-violet-200`}>
+        Sample Collected
+      </span>
+    );
+  return (
+    <span className={`${base} bg-amber-50 text-amber-700 border-amber-200`}>
+      {s || "Awaiting Collection"}
+    </span>
+  );
+}
+
+function ModalShell({ open, onClose, children }) {
+  if (!open) return null;
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4"
+      onMouseDown={(e) => e.target === e.currentTarget && onClose?.()}
+    >
+      {children}
+    </div>
+  );
+}
+
 export default function AdminDashboard() {
   const token = localStorage.getItem("token");
 
-  const [activeTab, setActiveTab] = useState("users"); // users | tests (future)
+  const [activeTab, setActiveTab] = useState("users"); // users | tests | activities
   const [users, setUsers] = useState([]);
   const [filterRole, setFilterRole] = useState("all");
 
@@ -53,6 +97,38 @@ export default function AdminDashboard() {
   const [creating, setCreating] = useState(false);
   const [createErr, setCreateErr] = useState("");
 
+  // -----------------------------
+  // ✅ TESTS STATE
+  // -----------------------------
+  const [tests, setTests] = useState([]);
+  const [loadingTests, setLoadingTests] = useState(false);
+  const [testsErr, setTestsErr] = useState("");
+  const [testsMsg, setTestsMsg] = useState("");
+
+  const [testsBusyId, setTestsBusyId] = useState(null);
+
+  // Add/Edit modal state
+  const [testModalOpen, setTestModalOpen] = useState(false);
+  const [editingTest, setEditingTest] = useState(null); // null = add mode
+  const [testForm, setTestForm] = useState({
+    name: "",
+    price: "",
+    sampleType: "Blood",
+    turnaroundTime: "24 hours",
+    isActive: true,
+  });
+  const [savingTest, setSavingTest] = useState(false);
+  const [testFormErr, setTestFormErr] = useState("");
+
+  // -----------------------------
+  // ✅ ACTIVITIES STATE
+  // -----------------------------
+  const [activities, setActivities] = useState([]);
+  const [loadingActivities, setLoadingActivities] = useState(false);
+  const [activitiesErr, setActivitiesErr] = useState("");
+  const [activitiesMsg, setActivitiesMsg] = useState("");
+  const [activitySearch, setActivitySearch] = useState("");
+
   const loadUsers = async () => {
     try {
       setUsersErr("");
@@ -65,10 +141,8 @@ export default function AdminDashboard() {
       });
 
       const data = await safeJson(res);
-
       if (!res.ok) throw new Error(data.message || "Failed to load users");
 
-      // backend returns { users: mapped }
       setUsers(Array.isArray(data.users) ? data.users : []);
     } catch (e) {
       setUsersErr(e.message || "Failed to load users");
@@ -77,10 +151,60 @@ export default function AdminDashboard() {
     }
   };
 
+  const loadTests = async () => {
+    try {
+      setTestsErr("");
+      setTestsMsg("");
+      setLoadingTests(true);
+
+      const res = await fetch(`${API_BASE}/tests/all`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      const data = await safeJson(res);
+      if (!res.ok) throw new Error(data.message || "Failed to load tests");
+
+      setTests(Array.isArray(data.data) ? data.data : []);
+    } catch (e) {
+      setTestsErr(e.message || "Failed to load tests");
+      setTests([]);
+    } finally {
+      setLoadingTests(false);
+    }
+  };
+
+  const loadActivities = async () => {
+    try {
+      setActivitiesErr("");
+      setActivitiesMsg("");
+      setLoadingActivities(true);
+
+      const res = await fetch(`${API_BASE}/bookings/queue?includePublished=1`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      const data = await safeJson(res);
+      if (!res.ok) throw new Error(data.message || "Failed to load activities");
+
+      setActivities(Array.isArray(data.data) ? data.data : []);
+    } catch (e) {
+      setActivitiesErr(e.message || "Failed to load activities");
+      setActivities([]);
+    } finally {
+      setLoadingActivities(false);
+    }
+  };
+
   useEffect(() => {
     loadUsers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterRole]);
+
+  useEffect(() => {
+    if (activeTab === "tests") loadTests();
+    if (activeTab === "activities") loadActivities();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
 
   const onChange = (e) => {
     setCreateErr("");
@@ -114,7 +238,6 @@ export default function AdminDashboard() {
       });
 
       const data = await safeJson(res);
-
       if (!res.ok) throw new Error(data.message || "Failed to create user");
 
       setUsersMsg("✅ User created successfully.");
@@ -126,7 +249,6 @@ export default function AdminDashboard() {
         citizenshipId: "",
       });
 
-      // refresh list
       await loadUsers();
     } catch (e2) {
       setCreateErr(e2.message || "Failed to create user");
@@ -153,7 +275,6 @@ export default function AdminDashboard() {
       });
 
       const data = await safeJson(res);
-
       if (!res.ok) throw new Error(data.message || "Failed to delete user");
 
       setUsersMsg("✅ User removed.");
@@ -165,7 +286,177 @@ export default function AdminDashboard() {
     }
   };
 
+  // -----------------------------
+  // ✅ TESTS HANDLERS
+  // -----------------------------
+  const openAddTest = () => {
+    setTestsMsg("");
+    setTestsErr("");
+    setTestFormErr("");
+    setEditingTest(null);
+    setTestForm({
+      name: "",
+      price: "",
+      sampleType: "Blood",
+      turnaroundTime: "24 hours",
+      isActive: true,
+    });
+    setTestModalOpen(true);
+  };
+
+  const openEditTest = (t) => {
+    setTestsMsg("");
+    setTestsErr("");
+    setTestFormErr("");
+    setEditingTest(t);
+    setTestForm({
+      name: t?.name || "",
+      price: String(t?.price ?? ""),
+      sampleType: t?.sampleType || "Blood",
+      turnaroundTime: t?.turnaroundTime || "24 hours",
+      isActive: !!t?.isActive,
+    });
+    setTestModalOpen(true);
+  };
+
+  const closeTestModal = () => {
+    setTestModalOpen(false);
+    setEditingTest(null);
+    setSavingTest(false);
+    setTestFormErr("");
+  };
+
+  const onTestFormChange = (e) => {
+    setTestFormErr("");
+    const { name, value, type, checked } = e.target;
+    setTestForm((p) => ({
+      ...p,
+      [name]: type === "checkbox" ? checked : value,
+    }));
+  };
+
+  const saveTest = async (e) => {
+    e.preventDefault();
+    setTestFormErr("");
+    setTestsErr("");
+    setTestsMsg("");
+
+    const name = String(testForm.name || "").trim();
+    const priceNum = Number(testForm.price);
+    const sampleType = String(testForm.sampleType || "").trim();
+    const turnaroundTime = String(testForm.turnaroundTime || "").trim();
+
+    if (!name) return setTestFormErr("Test name is required.");
+    if (!Number.isFinite(priceNum) || priceNum < 0)
+      return setTestFormErr("Price must be a valid number (0 or more).");
+    if (!sampleType) return setTestFormErr("Sample type is required.");
+    if (!turnaroundTime) return setTestFormErr("Turnaround time is required.");
+
+    try {
+      setSavingTest(true);
+
+      const payload = {
+        name,
+        price: priceNum,
+        sampleType,
+        turnaroundTime,
+        isActive: !!testForm.isActive,
+      };
+
+      const isEdit = !!editingTest?._id;
+      const url = isEdit ? `${API_BASE}/tests/${editingTest._id}` : `${API_BASE}/tests`;
+      const method = isEdit ? "PUT" : "POST";
+
+      const res = await fetch(url, {
+        method,
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await safeJson(res);
+      if (!res.ok) throw new Error(data.message || "Failed to save test");
+
+      setTestsMsg(isEdit ? "✅ Test updated." : "✅ Test added.");
+      closeTestModal();
+      await loadTests();
+    } catch (err) {
+      setTestFormErr(err.message || "Failed to save test");
+    } finally {
+      setSavingTest(false);
+    }
+  };
+
+  const deleteTest = async (t) => {
+    setTestsErr("");
+    setTestsMsg("");
+
+    const ok = window.confirm(
+      `Delete this test permanently?\n\n${t.name}\nPrice: ${t.price}\nSample: ${t.sampleType}`
+    );
+    if (!ok) return;
+
+    try {
+      setTestsBusyId(t._id);
+
+      const res = await fetch(`${API_BASE}/tests/${t._id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      const data = await safeJson(res);
+      if (!res.ok) throw new Error(data.message || "Failed to delete test");
+
+      setTestsMsg("✅ Test removed.");
+      await loadTests();
+    } catch (e) {
+      setTestsErr(e.message || "Failed to delete test");
+    } finally {
+      setTestsBusyId(null);
+    }
+  };
+
+  const toggleTest = async (t) => {
+    setTestsErr("");
+    setTestsMsg("");
+
+    try {
+      setTestsBusyId(t._id);
+
+      const res = await fetch(`${API_BASE}/tests/${t._id}/toggle`, {
+        method: "PATCH",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      const data = await safeJson(res);
+      if (!res.ok) throw new Error(data.message || "Failed to toggle test");
+
+      setTestsMsg(`✅ ${t.name} ${t.isActive ? "disabled" : "enabled"}.`);
+      await loadTests();
+    } catch (e) {
+      setTestsErr(e.message || "Failed to toggle test");
+    } finally {
+      setTestsBusyId(null);
+    }
+  };
+
   const visibleUsers = useMemo(() => users, [users]);
+
+  // ✅ Activities filter
+  const filteredActivities = useMemo(() => {
+    const q = String(activitySearch || "").trim().toLowerCase();
+    if (!q) return activities;
+
+    return (activities || []).filter((b) => {
+      const p = b?.patientUserId || {};
+      const name = String(p?.name || "").toLowerCase();
+      const cid = String(p?.citizenshipId || "").toLowerCase();
+      const email = String(p?.email || "").toLowerCase();
+      return name.includes(q) || cid.includes(q) || email.includes(q);
+    });
+  }, [activities, activitySearch]);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-50 via-sky-50 to-blue-100">
@@ -207,7 +498,7 @@ export default function AdminDashboard() {
             <div className="rounded-2xl border border-blue-100 bg-white shadow-sm p-6">
               <h2 className="text-xl font-semibold text-slate-900">Admin Panel</h2>
               <p className="text-sm text-slate-500 mt-1">
-                Manage users, staff, and test catalog.
+                Manage users, staff, test catalog, and activities.
               </p>
 
               <div className="mt-5 space-y-3">
@@ -231,8 +522,20 @@ export default function AdminDashboard() {
                       : "border-slate-200 hover:border-blue-200 hover:bg-slate-50"
                   }`}
                 >
-                  <div className="font-semibold text-slate-900">Tests</div>
-                  <div className="text-xs text-slate-500">View test list & remove items</div>
+                  <div className="font-semibold text-slate-900">Test Lists</div>
+                  <div className="text-xs text-slate-500">Add, update & remove tests</div>
+                </button>
+
+                <button
+                  onClick={() => setActiveTab("activities")}
+                  className={`w-full text-left rounded-2xl border px-4 py-3 transition ${
+                    activeTab === "activities"
+                      ? "border-blue-300 bg-blue-50"
+                      : "border-slate-200 hover:border-blue-200 hover:bg-slate-50"
+                  }`}
+                >
+                  <div className="font-semibold text-slate-900">Activities</div>
+                  <div className="text-xs text-slate-500">Bookings & test status tracking</div>
                 </button>
 
                 <button
@@ -252,6 +555,7 @@ export default function AdminDashboard() {
 
           {/* Main area */}
           <main className="lg:col-span-9">
+            {/* USERS TAB */}
             {activeTab === "users" && (
               <div className="rounded-2xl border border-blue-100 bg-white shadow-sm">
                 <div className="px-6 py-5 border-b border-slate-200 flex items-start justify-between">
@@ -437,7 +741,6 @@ export default function AdminDashboard() {
                                 <div className="flex flex-col items-end gap-2">
                                   <RolePill role={u.role} />
 
-                                  {/* ✅ NEW: Remove button */}
                                   <button
                                     onClick={() => deleteUser(u)}
                                     disabled={deletingId === u.id}
@@ -465,18 +768,348 @@ export default function AdminDashboard() {
               </div>
             )}
 
-            {/* Placeholder for tests tab if you already have it */}
+            {/* TESTS TAB */}
             {activeTab === "tests" && (
-              <div className="rounded-2xl border border-blue-100 bg-white shadow-sm p-6">
-                <h2 className="text-2xl font-semibold text-slate-900">Tests</h2>
-                <p className="text-sm text-slate-500 mt-1">
-                  Hook this section to your tests management next.
-                </p>
+              <div className="rounded-2xl border border-blue-100 bg-white shadow-sm">
+                <div className="px-6 py-5 border-b border-slate-200 flex items-start justify-between">
+                  <div>
+                    <h2 className="text-2xl font-semibold text-slate-900">Tests</h2>
+                    <p className="text-sm text-slate-500 mt-1">
+                      Add, update, enable/disable, or permanently remove tests.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={loadTests}
+                      className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                    >
+                      Refresh
+                    </button>
+                    <button
+                      onClick={openAddTest}
+                      className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+                    >
+                      + Add Test
+                    </button>
+                  </div>
+                </div>
+
+                <div className="p-6">
+                  {(testsErr || testsMsg) && (
+                    <div
+                      className={`mb-5 rounded-xl border p-3 text-sm ${
+                        testsErr
+                          ? "border-red-200 bg-red-50 text-red-700"
+                          : "border-green-200 bg-green-50 text-green-800"
+                      }`}
+                    >
+                      {testsErr || testsMsg}
+                    </div>
+                  )}
+
+                  {loadingTests ? (
+                    <div className="text-sm text-slate-600">Loading tests…</div>
+                  ) : (
+                    <div className="space-y-4">
+                      {tests.map((t) => (
+                        <div
+                          key={t._id}
+                          className="rounded-2xl border border-slate-200 bg-white p-4"
+                        >
+                          <pre className="text-sm text-slate-800 whitespace-pre-wrap">{`_id: ${t._id}
+name: "${t.name}"
+price: ${t.price}
+sampleType: "${t.sampleType}"
+turnaroundTime: "${t.turnaroundTime}"
+isActive: ${t.isActive}`}</pre>
+
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            <button
+                              onClick={() => openEditTest(t)}
+                              className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                            >
+                              Edit
+                            </button>
+
+                            <button
+                              onClick={() => toggleTest(t)}
+                              disabled={testsBusyId === t._id}
+                              className={`rounded-xl border px-4 py-2 text-sm font-semibold transition ${
+                                t.isActive
+                                  ? "border-amber-200 text-amber-700 hover:bg-amber-50"
+                                  : "border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+                              } ${testsBusyId === t._id ? "opacity-60 cursor-not-allowed" : ""}`}
+                            >
+                              {testsBusyId === t._id
+                                ? "Working..."
+                                : t.isActive
+                                ? "Disable"
+                                : "Enable"}
+                            </button>
+
+                            <button
+                              onClick={() => deleteTest(t)}
+                              disabled={testsBusyId === t._id}
+                              className={`rounded-xl border border-red-200 px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50 ${
+                                testsBusyId === t._id ? "opacity-60 cursor-not-allowed" : ""
+                              }`}
+                            >
+                              {testsBusyId === t._id ? "Deleting..." : "Delete"}
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+
+                      {tests.length === 0 && (
+                        <div className="text-sm text-slate-600">No tests found.</div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* ✅ ACTIVITIES TAB (FIXED TABLE CSS) */}
+            {activeTab === "activities" && (
+              <div className="rounded-2xl border border-blue-100 bg-white shadow-sm overflow-hidden">
+                <div className="px-6 py-5 border-b border-slate-200 flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+                  <div>
+                    <h2 className="text-2xl font-semibold text-slate-900">Activities</h2>
+                    <p className="text-sm text-slate-500 mt-1">
+                      View booked tests and their current statuses.
+                    </p>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full lg:w-auto">
+                    <input
+                      value={activitySearch}
+                      onChange={(e) => setActivitySearch(e.target.value)}
+                      placeholder="Search patient / citizenship / email..."
+                      className="w-full sm:w-[420px] rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-200"
+                    />
+                    <button
+                      onClick={loadActivities}
+                      className="rounded-xl border border-slate-200 px-5 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                    >
+                      Refresh
+                    </button>
+                  </div>
+                </div>
+
+                <div className="p-6">
+                  {(activitiesErr || activitiesMsg) && (
+                    <div
+                      className={`mb-5 rounded-xl border p-3 text-sm ${
+                        activitiesErr
+                          ? "border-red-200 bg-red-50 text-red-700"
+                          : "border-green-200 bg-green-50 text-green-800"
+                      }`}
+                    >
+                      {activitiesErr || activitiesMsg}
+                    </div>
+                  )}
+
+                  {loadingActivities ? (
+                    <div className="text-sm text-slate-600">Loading activities…</div>
+                  ) : filteredActivities.length === 0 ? (
+                    <div className="text-sm text-slate-600">No bookings found.</div>
+                  ) : (
+                    <div className="rounded-2xl border border-slate-200 overflow-hidden">
+                      <div className="w-full overflow-x-auto">
+                        <table className="w-full min-w-[1200px] table-fixed text-sm">
+                          <thead className="bg-slate-50">
+                            <tr className="border-b border-slate-200 text-xs text-slate-500">
+                              <th className="text-left font-semibold px-5 py-4 w-[220px]">
+                                Booked
+                              </th>
+                              <th className="text-left font-semibold px-5 py-4 w-[320px]">
+                                Patient
+                              </th>
+                              <th className="text-left font-semibold px-5 py-4 w-[360px]">
+                                Tests
+                              </th>
+                              <th className="text-left font-semibold px-5 py-4 w-[260px]">
+                                Statuses
+                              </th>
+                              <th className="text-left font-semibold px-5 py-4 w-[160px]">
+                                Booking Status
+                              </th>
+                            </tr>
+                          </thead>
+
+                          <tbody className="bg-white">
+                            {filteredActivities.map((b) => {
+                              const patient = b.patientUserId || {};
+                              const testsArr = Array.isArray(b.tests) ? b.tests : [];
+                              return (
+                                <tr key={b._id} className="border-b border-slate-100 align-top">
+                                  <td className="px-5 py-5 text-slate-800 whitespace-nowrap">
+                                    {b.createdAt ? new Date(b.createdAt).toLocaleString() : "—"}
+                                  </td>
+
+                                  <td className="px-5 py-5">
+                                    <div className="font-semibold text-slate-900 text-[15px]">
+                                      {patient.name || "Unknown"}
+                                    </div>
+                                    <div className="text-xs text-slate-600 mt-1">
+                                      Citizenship ID:{" "}
+                                      <span className="font-medium">{patient.citizenshipId || "—"}</span>
+                                    </div>
+                                    <div className="text-xs text-slate-600">
+                                      Email:{" "}
+                                      <span className="font-medium">{patient.email || "—"}</span>
+                                    </div>
+                                  </td>
+
+                                  <td className="px-5 py-5">
+                                    {testsArr.length ? (
+                                      <ul className="space-y-1.5">
+                                        {testsArr.map((t, idx) => (
+                                          <li
+                                            key={t._id || `${b._id}:t:${idx}`}
+                                            className="text-slate-900"
+                                          >
+                                            • {t.name || "—"}
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    ) : (
+                                      <span className="text-slate-500">—</span>
+                                    )}
+                                  </td>
+
+                                  <td className="px-5 py-5">
+                                    {testsArr.length ? (
+                                      <div className="flex flex-col gap-2">
+                                        {testsArr.map((t, idx) => (
+                                          <div key={t._id || `${b._id}:s:${idx}`}>
+                                            <StatusPill status={t.status || "Awaiting Collection"} />
+                                          </div>
+                                        ))}
+                                      </div>
+                                    ) : (
+                                      <span className="text-slate-500">—</span>
+                                    )}
+                                  </td>
+
+                                  <td className="px-5 py-5 whitespace-nowrap">
+                                    <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700">
+                                      {b.bookingStatus || "Booked"}
+                                    </span>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </main>
         </div>
       </div>
+
+      {/* Add/Edit Test Modal */}
+      <ModalShell open={testModalOpen} onClose={closeTestModal}>
+        <div className="w-full max-w-lg rounded-2xl bg-white shadow-xl border border-slate-200 overflow-hidden">
+          <div className="px-6 py-4 border-b border-slate-100 flex items-start justify-between">
+            <div>
+              <p className="text-base font-semibold text-slate-900">
+                {editingTest ? "Update Test" : "Add New Test"}
+              </p>
+              <p className="text-xs text-slate-500 mt-1">Fill details and save.</p>
+            </div>
+            <button
+              className="text-xs text-slate-500 hover:text-red-500"
+              onClick={closeTestModal}
+            >
+              Close
+            </button>
+          </div>
+
+          <form onSubmit={saveTest} className="p-6 space-y-3">
+            {testFormErr ? (
+              <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                {testFormErr}
+              </div>
+            ) : null}
+
+            <div>
+              <label className="text-xs text-slate-600">Test name</label>
+              <input
+                name="name"
+                value={testForm.name}
+                onChange={onTestFormChange}
+                className="mt-1 w-full rounded-xl border border-slate-200 px-4 py-2 text-sm outline-none focus:border-blue-400"
+                placeholder="Full Body Test"
+                required
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-slate-600">Price</label>
+                <input
+                  name="price"
+                  type="number"
+                  value={testForm.price}
+                  onChange={onTestFormChange}
+                  className="mt-1 w-full rounded-xl border border-slate-200 px-4 py-2 text-sm outline-none focus:border-blue-400"
+                  placeholder="450"
+                  min="0"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="text-xs text-slate-600">Sample type</label>
+                <input
+                  name="sampleType"
+                  value={testForm.sampleType}
+                  onChange={onTestFormChange}
+                  className="mt-1 w-full rounded-xl border border-slate-200 px-4 py-2 text-sm outline-none focus:border-blue-400"
+                  placeholder="Blood"
+                  required
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs text-slate-600">Turnaround time</label>
+              <input
+                name="turnaroundTime"
+                value={testForm.turnaroundTime}
+                onChange={onTestFormChange}
+                className="mt-1 w-full rounded-xl border border-slate-200 px-4 py-2 text-sm outline-none focus:border-blue-400"
+                placeholder="24 hours"
+                required
+              />
+            </div>
+
+            <label className="flex items-center gap-2 text-sm text-slate-700 pt-1">
+              <input
+                type="checkbox"
+                name="isActive"
+                checked={testForm.isActive}
+                onChange={onTestFormChange}
+              />
+              Active
+            </label>
+
+            <button
+              type="submit"
+              disabled={savingTest}
+              className="mt-2 w-full rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-70"
+            >
+              {savingTest ? "Saving..." : editingTest ? "Update Test" : "Add Test"}
+            </button>
+          </form>
+        </div>
+      </ModalShell>
     </div>
   );
 }

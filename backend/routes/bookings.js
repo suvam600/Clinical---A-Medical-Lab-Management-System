@@ -124,7 +124,10 @@ router.get("/mine", authRequired, async (req, res) => {
 
 /**
  * ✅ GET /api/bookings/queue
- * Technician/Admin sees all active bookings + patient info
+ * Technician/Admin sees bookings + patient info
+ *
+ * Default behaviour (UNCHANGED): excludes fully published bookings
+ * Optional: ?includePublished=1 -> includes fully published bookings too
  */
 router.get("/queue", authRequired, async (req, res) => {
   try {
@@ -132,10 +135,13 @@ router.get("/queue", authRequired, async (req, res) => {
       return res.status(403).json({ success: false, message: "Forbidden" });
     }
 
-    // still ok to filter by bookingStatus, because we auto-derive it
-    const bookings = await Booking.find({
-      bookingStatus: { $ne: "Report Published" },
-    })
+    const includePublished = String(req.query.includePublished || "") === "1";
+
+    const filter = includePublished
+      ? {} // ✅ include all bookings
+      : { bookingStatus: { $ne: "Report Published" } }; // ✅ keep old behaviour
+
+    const bookings = await Booking.find(filter)
       .populate("patientUserId", "name citizenshipId email")
       .sort({ createdAt: -1 });
 
