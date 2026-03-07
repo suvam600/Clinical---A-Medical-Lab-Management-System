@@ -12,7 +12,7 @@ function authRequired(req, res, next) {
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    // ✅ Backward compatible: accept userId OR id OR _id
+    //  Backward compatible: accept userId OR id OR _id
     const userId = decoded.userId || decoded.id || decoded._id;
 
     req.user = {

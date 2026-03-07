@@ -17,7 +17,6 @@ const Login = () => {
     setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
   };
 
-  // ✅ Improved login submit with role routing (admin/technician/patient)
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
@@ -33,7 +32,6 @@ const Login = () => {
         }),
       });
 
-      // Safer parsing (avoids crashes when backend returns non-JSON)
       const text = await res.text();
       let data = {};
       try {
@@ -50,17 +48,17 @@ const Login = () => {
         throw new Error("Login response missing token or user details.");
       }
 
-      // Save token + user
       localStorage.setItem("token", data.token);
       localStorage.setItem("user", JSON.stringify(data.user));
 
-      // ✅ Role-based navigation
       const role = (data.user.role || "").toLowerCase();
 
       if (role === "admin") {
         navigate("/admin");
       } else if (role === "technician") {
         navigate("/technician");
+      } else if (role === "doctor") {
+        navigate("/doctor");
       } else {
         navigate("/dashboard");
       }
@@ -73,7 +71,6 @@ const Login = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-sky-50 to-white text-slate-900 flex">
-      {/* Left / Background side */}
       <div className="hidden lg:flex flex-1 relative overflow-hidden">
         <div className="absolute inset-0">
           <img
@@ -120,7 +117,6 @@ const Login = () => {
         </div>
       </div>
 
-      {/* Right / Login form */}
       <div className="flex-1 flex items-center justify-center px-6 py-10 sm:px-8">
         <AuthCard
           title="Sign in to Clinical"
@@ -156,7 +152,6 @@ const Login = () => {
               </p>
             )}
 
-            {/* Keep me signed in + Forgot password */}
             <div className="flex items-center justify-between text-xs text-slate-500 mt-1">
               <label className="inline-flex items-center gap-2 cursor-pointer">
                 <input
@@ -175,7 +170,6 @@ const Login = () => {
               </button>
             </div>
 
-            {/* Sign in button */}
             <button
               type="submit"
               disabled={loading}

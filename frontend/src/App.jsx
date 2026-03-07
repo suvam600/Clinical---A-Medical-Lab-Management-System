@@ -15,9 +15,14 @@ import TechnicianDashboard from "./pages/TechnicianDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
 import RegisterTests from "./pages/RegisterTests";
 import ActiveTests from "./pages/ActiveTests";
-import Reports from "./pages/Reports"; 
+import Reports from "./pages/Reports";
 
 import PatientLayout from "./components/PatientLayout";
+
+// NEW
+import ConsultDoctor from "./pages/ConsultDoctor";
+import ConsultationChat from "./pages/ConsultationChat";
+import DoctorDashboard from "./pages/DoctorDashboard";
 
 const RequireAuth = ({ children, allowedRoles }) => {
   const location = useLocation();
@@ -37,6 +42,7 @@ const RequireAuth = ({ children, allowedRoles }) => {
   if (allowedRoles && !allowedRoles.includes(user.role)) {
     if (user.role === "admin") return <Navigate to="/admin" replace />;
     if (user.role === "technician") return <Navigate to="/technician" replace />;
+    if (user.role === "doctor") return <Navigate to="/doctor" replace />;
     return <Navigate to="/dashboard" replace />;
   }
 
@@ -50,6 +56,7 @@ function App() {
         <Route path="/" element={<Login />} />
         <Route path="/register" element={<Register />} />
 
+        {/* Patient routes with layout */}
         <Route
           element={
             <RequireAuth allowedRoles={["patient"]}>
@@ -60,13 +67,11 @@ function App() {
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/register-tests" element={<RegisterTests />} />
           <Route path="/active-tests" element={<ActiveTests />} />
-
-          {/*  REAL Reports page */}
           <Route path="/reports" element={<Reports />} />
-
+          <Route path="/consult" element={<ConsultDoctor />} />
           <Route
-            path="/consult"
-            element={<div className="max-w-6xl">Consult doctor page (next)</div>}
+            path="/consult/:consultationId"
+            element={<ConsultationChat />}
           />
           <Route
             path="/profile"
@@ -74,6 +79,25 @@ function App() {
           />
         </Route>
 
+        {/* Doctor routes */}
+        <Route
+          path="/doctor"
+          element={
+            <RequireAuth allowedRoles={["doctor"]}>
+              <DoctorDashboard />
+            </RequireAuth>
+          }
+        />
+        <Route
+          path="/doctor/consult/:consultationId"
+          element={
+            <RequireAuth allowedRoles={["doctor"]}>
+              <ConsultationChat />
+            </RequireAuth>
+          }
+        />
+
+        {/* Technician routes */}
         <Route
           path="/technician"
           element={
@@ -83,6 +107,7 @@ function App() {
           }
         />
 
+        {/* Admin routes */}
         <Route
           path="/admin"
           element={
