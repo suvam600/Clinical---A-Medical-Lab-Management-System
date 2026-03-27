@@ -12,7 +12,7 @@ const userSchema = new mongoose.Schema(
     email: {
       type: String,
       required: true,
-      unique: true, // index created here
+      unique: true,
       lowercase: true,
       trim: true,
     },
@@ -31,9 +31,25 @@ const userSchema = new mongoose.Schema(
     // Citizenship ID = unique patient identifier
     citizenshipId: {
       type: String,
-      unique: true, // index created here
-      sparse: true, // allows null for non-patient users
+      unique: true,
+      sparse: true,
       trim: true,
+    },
+
+    // Email verification fields for newly created users
+    isVerified: {
+      type: Boolean,
+      default: undefined,
+    },
+
+    verificationCode: {
+      type: String,
+      default: null,
+    },
+
+    verificationCodeExpires: {
+      type: Date,
+      default: null,
     },
   },
   { timestamps: true }

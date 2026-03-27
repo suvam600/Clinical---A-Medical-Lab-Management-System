@@ -83,7 +83,7 @@ const Dashboard = () => {
       <section className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
         <div className="lg:col-span-2 rounded-2xl border border-blue-100 bg-white shadow-sm p-6">
           <h1 className="text-3xl md:text-4xl font-semibold text-slate-900">
-            Welcome back, {patientName} 👋
+            Hello, {patientName} 👋
           </h1>
           <p className="mt-2 text-sm text-slate-600 max-w-2xl">
             Use the sidebar to access all features. Track your tests, view

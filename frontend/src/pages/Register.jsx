@@ -45,17 +45,16 @@ const Register = () => {
           email: form.email,
           password: form.password,
           citizenshipId: form.citizenshipId,
-          role: "patient", // default role
+          role: "patient",
         }),
       });
 
-      // Read as text first, then safely parse JSON so we avoid “Unexpected end of JSON input”
       const text = await res.text();
       let data = {};
       try {
         data = text ? JSON.parse(text) : {};
       } catch {
-        // response was not valid JSON, leave data as {}
+        data = {};
       }
 
       if (!res.ok) {
@@ -63,11 +62,15 @@ const Register = () => {
       }
 
       setSuccessMsg(
-        data.message || "Registration successful. You can now sign in."
+        data.message ||
+          "Registration successful. Enter the verification code sent to your email."
       );
 
-      // After short delay redirect to login
-      setTimeout(() => navigate("/"), 1200);
+      // Save email so verify page can use it
+      localStorage.setItem("verifyEmail", form.email);
+
+      // Redirect to verify code page
+      setTimeout(() => navigate("/verify-code"), 1500);
     } catch (err) {
       setError(err.message || "Something went wrong.");
     } finally {
@@ -162,12 +165,12 @@ const Register = () => {
               onChange={handleChange}
             />
 
-            {/* Error / success messages */}
             {error && (
               <p className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-md px-2 py-1">
                 {error}
               </p>
             )}
+
             {successMsg && (
               <p className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-md px-2 py-1">
                 {successMsg}

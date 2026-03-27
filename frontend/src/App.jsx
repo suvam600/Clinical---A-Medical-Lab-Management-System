@@ -10,6 +10,7 @@ import {
 
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import VerifyCode from "./pages/VerifyCode";
 import Dashboard from "./pages/Dashboard";
 import TechnicianDashboard from "./pages/TechnicianDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
@@ -41,7 +42,9 @@ const RequireAuth = ({ children, allowedRoles }) => {
 
   if (allowedRoles && !allowedRoles.includes(user.role)) {
     if (user.role === "admin") return <Navigate to="/admin" replace />;
-    if (user.role === "technician") return <Navigate to="/technician" replace />;
+    if (user.role === "technician") {
+      return <Navigate to="/technician" replace />;
+    }
     if (user.role === "doctor") return <Navigate to="/doctor" replace />;
     return <Navigate to="/dashboard" replace />;
   }
@@ -55,6 +58,7 @@ function App() {
       <Routes>
         <Route path="/" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/verify-code" element={<VerifyCode />} />
 
         {/* Patient routes with layout */}
         <Route
