@@ -20,7 +20,6 @@ router.post("/register", async (req, res) => {
         .json({ message: "Name, email and password are required." });
     }
 
-    // citizenshipId as unique
     if (!citizenshipId) {
       return res.status(400).json({ message: "Citizenship ID is required." });
     }
@@ -44,7 +43,7 @@ router.post("/register", async (req, res) => {
       100000 + Math.random() * 900000
     ).toString();
 
-    const verificationCodeExpires = new Date(Date.now() + 1000 * 60 * 10); // 10 minutes
+    const verificationCodeExpires = new Date(Date.now() + 1000 * 60 * 10);
 
     const user = await User.create({
       name,
@@ -126,6 +125,90 @@ router.post("/verify-code", async (req, res) => {
   }
 });
 
+// POST /api/auth/forgot-password
+router.post("/forgot-password", async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ message: "Email is required." });
+    }
+
+    const user = await User.findOne({ email });
+
+    if (!user) {
+      return res.status(400).json({ message: "User not found." });
+    }
+
+    const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const resetCodeExpires = new Date(Date.now() + 1000 * 60 * 10);
+
+    user.resetCode = resetCode;
+    user.resetCodeExpires = resetCodeExpires;
+
+    await user.save();
+
+    const html = `
+      <div style="font-family: Arial, sans-serif; line-height: 1.6;">
+        <h2>Password Reset</h2>
+        <p>Hello ${user.name},</p>
+        <p>Your password reset code is:</p>
+        <h1 style="letter-spacing: 6px; font-size: 32px;">${resetCode}</h1>
+        <p>This code will expire in 10 minutes.</p>
+      </div>
+    `;
+
+    await sendEmail(user.email, "Reset your password", html);
+
+    return res.json({
+      message: "Reset code sent to your email.",
+    });
+  } catch (err) {
+    console.error("Forgot password error:", err);
+    return res.status(500).json({ message: "Server error." });
+  }
+});
+
+// POST /api/auth/reset-password
+router.post("/reset-password", async (req, res) => {
+  try {
+    const { email, code, newPassword } = req.body;
+
+    if (!email || !code || !newPassword) {
+      return res.status(400).json({
+        message: "Email, code and new password are required.",
+      });
+    }
+
+    const user = await User.findOne({
+      email,
+      resetCode: code,
+      resetCodeExpires: { $gt: new Date() },
+    });
+
+    if (!user) {
+      return res.status(400).json({
+        message: "Invalid or expired code.",
+      });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    user.passwordHash = await bcrypt.hash(newPassword, salt);
+
+    user.resetCode = null;
+    user.resetCodeExpires = null;
+
+    await user.save();
+
+    return res.json({
+      message: "Password reset successful. You can now login.",
+    });
+  } catch (err) {
+    console.error("Reset password error:", err);
+    return res.status(500).json({ message: "Server error." });
+  }
+});
+
 // POST /api/auth/login
 router.post("/login", async (req, res) => {
   try {
@@ -143,8 +226,6 @@ router.post("/login", async (req, res) => {
       return res.status(400).json({ message: "Invalid email or password." });
     }
 
-    // Only newly created users with isVerified === false are blocked
-    // Old users with isVerified undefined can still log in
     if (user.isVerified === false) {
       return res.status(403).json({
         message: "Please verify your email before logging in.",

@@ -116,7 +116,7 @@ const Register = () => {
           subtitle="Fill the details below to register as a patient."
           footerText="Already have an account?"
           footerLinkText="Sign in"
-          footerLinkTo="/"
+          footerLinkTo="/login"
         >
           <form onSubmit={handleSubmit} className="space-y-4">
             <Input

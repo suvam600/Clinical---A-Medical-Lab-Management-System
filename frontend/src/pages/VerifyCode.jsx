@@ -55,7 +55,7 @@ const VerifyCode = () => {
       localStorage.removeItem("verifyEmail");
 
       // redirect to login
-      setTimeout(() => navigate("/"), 1500);
+      setTimeout(() => navigate("/login"), 1500);
     } catch (err) {
       setError(err.message || "Something went wrong.");
     } finally {
