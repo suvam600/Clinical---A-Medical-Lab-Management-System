@@ -1,9 +1,9 @@
-// backend/routes/auth.js
 const express = require("express");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const User = require("../models/user");
-const sendEmail = require("../utils/sendEmail");
+const { authRequired } = require("../middleware/authMiddleware");
+const { sendEmail, sendVerificationEmail } = require("../utils/sendEmail");
 
 const router = express.Router();
 
@@ -56,18 +56,7 @@ router.post("/register", async (req, res) => {
       verificationCodeExpires,
     });
 
-    const html = `
-      <div style="font-family: Arial, sans-serif; line-height: 1.6;">
-        <h2>Verify Your Email</h2>
-        <p>Hello ${user.name},</p>
-        <p>Thank you for registering.</p>
-        <p>Your verification code is:</p>
-        <h1 style="letter-spacing: 6px; font-size: 32px;">${verificationCode}</h1>
-        <p>This code will expire in 10 minutes.</p>
-      </div>
-    `;
-
-    await sendEmail(user.email, "Your verification code", html);
+    await sendVerificationEmail(user.email, verificationCode);
 
     return res.status(201).json({
       message:
@@ -149,16 +138,50 @@ router.post("/forgot-password", async (req, res) => {
     await user.save();
 
     const html = `
-      <div style="font-family: Arial, sans-serif; line-height: 1.6;">
-        <h2>Password Reset</h2>
-        <p>Hello ${user.name},</p>
-        <p>Your password reset code is:</p>
-        <h1 style="letter-spacing: 6px; font-size: 32px;">${resetCode}</h1>
-        <p>This code will expire in 10 minutes.</p>
+      <div style="font-family: Arial, sans-serif; background-color: #f4f6f8; padding: 40px;">
+        <div style="max-width: 500px; margin: auto; background: #ffffff; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.08);">
+          <div style="background: linear-gradient(135deg, #4CAF50, #2E7D32); color: white; padding: 20px; text-align: center;">
+            <h2 style="margin: 0;">Clinical</h2>
+            <p style="margin: 5px 0 0;">Medical Lab Management System</p>
+          </div>
+
+          <div style="padding: 30px; text-align: center;">
+            <h3 style="margin-bottom: 10px; color: #333;">Reset Your Password</h3>
+            <p style="color: #555; font-size: 14px;">
+              Hello <strong>${user.name}</strong>,<br/>
+              Use the password reset code below to continue.
+            </p>
+
+            <div style="
+              margin: 25px 0;
+              padding: 15px;
+              font-size: 28px;
+              font-weight: bold;
+              letter-spacing: 5px;
+              color: #2E7D32;
+              background: #f1f8f4;
+              border-radius: 8px;
+            ">
+              ${resetCode}
+            </div>
+
+            <p style="font-size: 13px; color: #777;">
+              This code will expire in 10 minutes.
+            </p>
+
+            <p style="font-size: 13px; color: #777; margin-top: 20px;">
+              If you did not request this, please ignore this email.
+            </p>
+          </div>
+
+          <div style="background: #f4f6f8; padding: 15px; text-align: center; font-size: 12px; color: #999;">
+            © ${new Date().getFullYear()} Clinical. All rights reserved.
+          </div>
+        </div>
       </div>
     `;
 
-    await sendEmail(user.email, "Reset your password", html);
+    await sendEmail(user.email, "Clinical - Password Reset", html);
 
     return res.json({
       message: "Reset code sent to your email.",
@@ -252,6 +275,86 @@ router.post("/login", async (req, res) => {
     });
   } catch (err) {
     console.error("Login error:", err);
+    return res.status(500).json({ message: "Server error." });
+  }
+});
+
+// GET /api/auth/me
+router.get("/me", authRequired, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.userId).select("-passwordHash");
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    return res.json({
+      user: {
+        id: user._id.toString(),
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        citizenshipId: user.citizenshipId,
+        isVerified: user.isVerified,
+      },
+    });
+  } catch (err) {
+    console.error("Get profile error:", err);
+    return res.status(500).json({ message: "Server error." });
+  }
+});
+
+// PUT /api/auth/me
+router.put("/me", authRequired, async (req, res) => {
+  try {
+    const { name, citizenshipId } = req.body;
+
+    if (!name || !name.trim()) {
+      return res.status(400).json({ message: "Name is required." });
+    }
+
+    const user = await User.findById(req.user.userId);
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    if (
+      citizenshipId &&
+      citizenshipId.trim() &&
+      citizenshipId.trim() !== user.citizenshipId
+    ) {
+      const existingCitizen = await User.findOne({
+        citizenshipId: citizenshipId.trim(),
+        _id: { $ne: user._id },
+      });
+
+      if (existingCitizen) {
+        return res
+          .status(400)
+          .json({ message: "Citizenship ID is already registered." });
+      }
+
+      user.citizenshipId = citizenshipId.trim();
+    }
+
+    user.name = name.trim();
+
+    await user.save();
+
+    return res.json({
+      message: "Profile updated successfully.",
+      user: {
+        id: user._id.toString(),
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        citizenshipId: user.citizenshipId,
+        isVerified: user.isVerified,
+      },
+    });
+  } catch (err) {
+    console.error("Update profile error:", err);
     return res.status(500).json({ message: "Server error." });
   }
 });

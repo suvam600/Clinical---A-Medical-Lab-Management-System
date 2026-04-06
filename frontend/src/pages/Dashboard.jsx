@@ -138,7 +138,7 @@ const Dashboard = () => {
             </div>
 
             <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4">
-              <p className="text-xs text-slate-500">Active tests</p>
+              <p className="text-xs text-slate-500">Tests</p>
               <p className="font-semibold text-slate-900">
                 {loadingBookings ? "…" : activeTests.length}
               </p>
@@ -232,12 +232,7 @@ const Dashboard = () => {
             </p>
           </div>
 
-          <button
-            onClick={() => navigate("/profile")}
-            className="mt-4 inline-flex items-center justify-center rounded-xl border border-slate-200 px-3 py-2 text-xs font-medium text-slate-700 hover:border-blue-500 hover:text-blue-700 transition w-full"
-          >
-            Edit profile
-          </button>
+         
         </div>
       </section>
     </div>

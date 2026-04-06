@@ -1,33 +1,46 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import { Settings, X } from "lucide-react";
+import { Settings, X, User, Mail, IdCard, Save, Shield } from "lucide-react";
 
-const API_BASE = "/api";
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:5000/api";
 
 export default function PatientLayout() {
   const navigate = useNavigate();
 
   const [showSettings, setShowSettings] = useState(false);
-  const [activeModal, setActiveModal] = useState(""); // profile | reset | terms
+  const [activeModal, setActiveModal] = useState("");
   const [loading, setLoading] = useState(false);
   const [settingsMessage, setSettingsMessage] = useState("");
   const [settingsError, setSettingsError] = useState("");
+
+  const [user, setUser] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem("user") || "{}");
+    } catch {
+      return {};
+    }
+  });
+
+  const [profileForm, setProfileForm] = useState({
+    name: "",
+    citizenshipId: "",
+  });
 
   const [resetForm, setResetForm] = useState({
     code: "",
     newPassword: "",
   });
 
-  const user = useMemo(() => {
-    try {
-      return JSON.parse(localStorage.getItem("user") || "{}");
-    } catch {
-      return {};
-    }
-  }, []);
-
   const patientName = user?.name || "Patient";
   const patientEmail = user?.email || "";
+  const patientCitizenshipId = user?.citizenshipId || "";
+
+  useEffect(() => {
+    setProfileForm({
+      name: user?.name || "",
+      citizenshipId: user?.citizenshipId || "",
+    });
+  }, [user]);
 
   const handleLogout = () => {
     localStorage.removeItem("token");
@@ -35,11 +48,51 @@ export default function PatientLayout() {
     navigate("/login", { replace: true });
   };
 
-  const openModal = (name) => {
+  const openModal = async (name) => {
     setShowSettings(false);
     setSettingsError("");
     setSettingsMessage("");
     setActiveModal(name);
+
+    if (name === "profile") {
+      try {
+        const token = localStorage.getItem("token");
+
+        if (!token) {
+          throw new Error("Please login again.");
+        }
+
+        const res = await fetch(`${API_BASE}/auth/me`, {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        const text = await res.text();
+        let data = {};
+        try {
+          data = text ? JSON.parse(text) : {};
+        } catch {
+          data = {};
+        }
+
+        if (!res.ok) {
+          throw new Error(data.message || "Failed to load profile.");
+        }
+
+        if (data.user) {
+          setUser(data.user);
+          localStorage.setItem("user", JSON.stringify(data.user));
+          setProfileForm({
+            name: data.user.name || "",
+            citizenshipId: data.user.citizenshipId || "",
+          });
+        }
+      } catch (err) {
+        setSettingsError(err.message || "Failed to load profile.");
+      }
+    }
   };
 
   const closeModal = () => {
@@ -50,6 +103,61 @@ export default function PatientLayout() {
       code: "",
       newPassword: "",
     });
+    setProfileForm({
+      name: user?.name || "",
+      citizenshipId: user?.citizenshipId || "",
+    });
+  };
+
+  const handleUpdateProfile = async (e) => {
+    e.preventDefault();
+
+    try {
+      setLoading(true);
+      setSettingsError("");
+      setSettingsMessage("");
+
+      const token = localStorage.getItem("token");
+
+      if (!token) {
+        throw new Error("Please login again.");
+      }
+
+      const res = await fetch(`${API_BASE}/auth/me`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          name: profileForm.name,
+          citizenshipId: profileForm.citizenshipId,
+        }),
+      });
+
+      const text = await res.text();
+      let data = {};
+      try {
+        data = text ? JSON.parse(text) : {};
+      } catch {
+        data = {};
+      }
+
+      if (!res.ok) {
+        throw new Error(data.message || "Failed to update profile.");
+      }
+
+      if (data.user) {
+        setUser(data.user);
+        localStorage.setItem("user", JSON.stringify(data.user));
+      }
+
+      setSettingsMessage("Profile updated successfully.");
+    } catch (err) {
+      setSettingsError(err.message || "Something went wrong.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSendResetCode = async () => {
@@ -133,7 +241,6 @@ export default function PatientLayout() {
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-b from-blue-50 via-sky-50 to-blue-100">
-      {/* Top bar */}
       <header className="w-full border-b border-slate-200 bg-white/80 backdrop-blur relative">
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -183,9 +290,7 @@ export default function PatientLayout() {
                   Terms & conditions
                 </button>
 
-                <button
-                  className="w-full text-left rounded-xl px-4 py-2.5 text-sm hover:bg-slate-100"
-                >
+                <button className="w-full text-left rounded-xl px-4 py-2.5 text-sm hover:bg-slate-100">
                   Notification settings
                 </button>
 
@@ -203,10 +308,8 @@ export default function PatientLayout() {
         </div>
       </header>
 
-      {/* Body */}
       <div className="flex-1 w-full">
         <div className="w-full flex">
-          {/* Sidebar */}
           <aside className="hidden md:flex w-72 shrink-0">
             <div className="w-full min-h-[calc(100vh-64px)] bg-gradient-to-b from-blue-50 to-sky-100 text-slate-800 border-r border-blue-100">
               <div className="px-5 py-4 border-b border-blue-100">
@@ -283,14 +386,12 @@ export default function PatientLayout() {
             </div>
           </aside>
 
-          {/* Page content */}
           <main className="flex-1 bg-slate-50 px-6 py-6 md:px-10 md:py-10">
             <Outlet />
           </main>
         </div>
       </div>
 
-      {/* Footer */}
       <footer className="border-t border-slate-200 bg-white/80">
         <div className="max-w-7xl mx-auto px-4 py-8 grid grid-cols-1 md:grid-cols-3 gap-6 text-sm text-slate-600">
           <div>
@@ -338,49 +439,137 @@ export default function PatientLayout() {
         </div>
       </footer>
 
-      {/* Overlay */}
       {activeModal && (
         <div
-          className="fixed inset-0 z-[60] bg-black/40 flex items-center justify-center px-4"
+          className="fixed inset-0 z-[60] bg-black/40 backdrop-blur-sm flex items-center justify-center px-4"
           onClick={closeModal}
         >
           <div
-            className="w-full max-w-md rounded-2xl bg-white shadow-2xl border border-slate-200"
+            className="w-full max-w-lg rounded-3xl bg-white shadow-2xl border border-slate-200 overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
-              <h2 className="text-lg font-semibold text-slate-900">
-                {activeModal === "profile" && "Edit Profile"}
-                {activeModal === "reset" && "Reset Password"}
-                {activeModal === "terms" && "Terms & Conditions"}
-              </h2>
+            <div className="px-6 py-5 border-b border-slate-200 bg-gradient-to-r from-blue-600 to-sky-600 text-white flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-semibold">
+                  {activeModal === "profile" && "Edit Profile"}
+                  {activeModal === "reset" && "Reset Password"}
+                  {activeModal === "terms" && "Terms & Conditions"}
+                </h2>
+                <p className="text-xs text-blue-100 mt-1">
+                  {activeModal === "profile" &&
+                    "Update your personal information securely."}
+                  {activeModal === "reset" &&
+                    "Reset your account password using verification code."}
+                  {activeModal === "terms" &&
+                    "Read the terms for using the Clinical system."}
+                </p>
+              </div>
 
               <button
                 onClick={closeModal}
-                className="rounded-lg p-2 hover:bg-slate-100"
+                className="rounded-xl p-2 hover:bg-white/10"
               >
                 <X size={18} />
               </button>
             </div>
 
-            <div className="p-5">
+            <div className="p-6">
               {activeModal === "profile" && (
-                <div className="space-y-3 text-sm text-slate-600">
-                  <p>
-                    Profile editing UI can be added next here.
-                  </p>
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                    <p className="text-xs text-slate-500">Current Name</p>
-                    <p className="font-medium text-slate-900 mt-1">
-                      {patientName}
-                    </p>
+                <div className="space-y-5">
+                  <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4 flex items-center gap-4">
+                    <div className="h-14 w-14 rounded-2xl bg-blue-600 text-white flex items-center justify-center">
+                      <User size={24} />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900">
+                        {patientName}
+                      </p>
+                      <p className="text-xs text-slate-500 break-all">
+                        {patientEmail || "No email"}
+                      </p>
+                      <p className="text-[11px] text-slate-500 mt-1">
+                        Keep your profile details up to date for lab records.
+                      </p>
+                    </div>
                   </div>
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                    <p className="text-xs text-slate-500">Email</p>
-                    <p className="font-medium text-slate-900 mt-1">
-                      {patientEmail || "—"}
+
+                  <form onSubmit={handleUpdateProfile} className="space-y-4">
+                    <div>
+                      <label className="mb-1.5 flex items-center gap-2 text-sm font-medium text-slate-700">
+                        <User size={16} />
+                        Full Name
+                      </label>
+                      <input
+                        type="text"
+                        value={profileForm.name}
+                        onChange={(e) =>
+                          setProfileForm((prev) => ({
+                            ...prev,
+                            name: e.target.value,
+                          }))
+                        }
+                        placeholder="Enter your full name"
+                        className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="mb-1.5 flex items-center gap-2 text-sm font-medium text-slate-700">
+                        <IdCard size={16} />
+                        Citizenship ID
+                      </label>
+                      <input
+                        type="text"
+                        value={profileForm.citizenshipId}
+                        onChange={(e) =>
+                          setProfileForm((prev) => ({
+                            ...prev,
+                            citizenshipId: e.target.value,
+                          }))
+                        }
+                        placeholder="Enter citizenship ID"
+                        className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none focus:border-blue-500"
+                      />
+                    </div>
+
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                      <label className="mb-1.5 flex items-center gap-2 text-sm font-medium text-slate-700">
+                        <Mail size={16} />
+                        Email Address
+                      </label>
+                      <p className="text-sm font-medium text-slate-900 break-all">
+                        {patientEmail || "—"}
+                      </p>
+                      <div className="mt-3 flex items-start gap-2 text-xs text-slate-500">
+                        <Shield size={14} className="mt-0.5 shrink-0" />
+                        <span>Email cannot be changed from this section.</span>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end">
+                      <button
+                        type="submit"
+                        disabled={loading}
+                        className="inline-flex items-center gap-2 rounded-2xl bg-blue-600 text-white px-5 py-3 text-sm font-semibold hover:bg-blue-700 disabled:opacity-60"
+                      >
+                        <Save size={16} />
+                        {loading ? "Saving..." : "Save Changes"}
+                      </button>
+                    </div>
+                  </form>
+
+                  {settingsMessage && (
+                    <p className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-xl px-4 py-3">
+                      {settingsMessage}
                     </p>
-                  </div>
+                  )}
+
+                  {settingsError && (
+                    <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl px-4 py-3">
+                      {settingsError}
+                    </p>
+                  )}
                 </div>
               )}
 
