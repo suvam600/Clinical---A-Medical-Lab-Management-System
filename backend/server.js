@@ -13,6 +13,7 @@ const testRoutes = require("./routes/tests");
 const bookingRoutes = require("./routes/bookings");
 const consultationRoutes = require("./routes/consultations");
 const messageRoutes = require("./routes/messages");
+const paymentRoutes = require("./routes/payments");
 
 const app = express();
 const server = http.createServer(app);
@@ -49,6 +50,7 @@ app.use("/api/tests", testRoutes);
 app.use("/api/bookings", bookingRoutes);
 app.use("/api/consultations", consultationRoutes);
 app.use("/api/messages", messageRoutes);
+app.use("/api/payments", paymentRoutes);
 
 // Test route
 app.get("/", (req, res) => {

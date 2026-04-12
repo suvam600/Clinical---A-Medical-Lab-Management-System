@@ -1,6 +1,6 @@
 // src/pages/Dashboard.jsx
 import React, { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 
 const statusPill = (status) => {
   const base = "text-[11px] font-semibold px-3 py-1 rounded-full";
@@ -17,6 +17,7 @@ const statusLabel = (status) => {
 
 const Dashboard = () => {
   const navigate = useNavigate();
+  const location = useLocation();
 
   const user = useMemo(() => {
     try {
@@ -30,6 +31,24 @@ const Dashboard = () => {
 
   const [bookings, setBookings] = useState([]);
   const [loadingBookings, setLoadingBookings] = useState(true);
+  const [paymentMessage, setPaymentMessage] = useState("");
+  const [paymentMessageType, setPaymentMessageType] = useState("");
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const payment = params.get("payment");
+
+    if (payment === "success") {
+      setPaymentMessage("Payment successful. Your booking is now confirmed.");
+      setPaymentMessageType("success");
+    } else if (payment === "failed") {
+      setPaymentMessage("Payment failed. Please try again.");
+      setPaymentMessageType("failed");
+    } else {
+      setPaymentMessage("");
+      setPaymentMessageType("");
+    }
+  }, [location.search]);
 
   useEffect(() => {
     const loadBookings = async () => {
@@ -79,6 +98,18 @@ const Dashboard = () => {
 
   return (
     <div className="max-w-6xl">
+      {paymentMessage ? (
+        <div
+          className={`mb-4 rounded-xl border p-4 text-sm ${
+            paymentMessageType === "success"
+              ? "border-green-200 bg-green-50 text-green-800"
+              : "border-red-200 bg-red-50 text-red-700"
+          }`}
+        >
+          {paymentMessage}
+        </div>
+      ) : null}
+
       {/* Welcome + quick actions */}
       <section className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
         <div className="lg:col-span-2 rounded-2xl border border-blue-100 bg-white shadow-sm p-6">
@@ -231,8 +262,6 @@ const Dashboard = () => {
               </span>
             </p>
           </div>
-
-         
         </div>
       </section>
     </div>

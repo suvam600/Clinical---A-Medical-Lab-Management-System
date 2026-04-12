@@ -1,18 +1,36 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-// ✅ prevents "Unexpected token <" when server returns HTML
+// prevents "Unexpected token <" when server returns HTML
 async function safeJson(res) {
   const text = await res.text();
   try {
     return text ? JSON.parse(text) : {};
   } catch {
-    // If backend returned HTML, show first part to help debug
     return {
       success: false,
       message: text?.slice(0, 120) || "Server returned invalid JSON",
     };
   }
+}
+
+function submitEsewaForm(paymentData) {
+  const form = document.createElement("form");
+  form.method = "POST";
+  form.action = paymentData.form_url;
+
+  Object.entries(paymentData).forEach(([key, value]) => {
+    if (key === "form_url") return;
+
+    const input = document.createElement("input");
+    input.type = "hidden";
+    input.name = key;
+    input.value = value;
+    form.appendChild(input);
+  });
+
+  document.body.appendChild(form);
+  form.submit();
 }
 
 export default function RegisterTests() {
@@ -26,6 +44,7 @@ export default function RegisterTests() {
   const [sort, setSort] = useState("name-asc");
   const [creating, setCreating] = useState(false);
   const [successMsg, setSuccessMsg] = useState("");
+  const [createdBooking, setCreatedBooking] = useState(null);
 
   useEffect(() => {
     const loadTests = async () => {
@@ -75,6 +94,7 @@ export default function RegisterTests() {
   const toggleSelect = (id) => {
     setSuccessMsg("");
     setErr("");
+    setCreatedBooking(null);
     setSelected((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
     );
@@ -83,6 +103,7 @@ export default function RegisterTests() {
   const clearSelection = () => {
     setErr("");
     setSuccessMsg("");
+    setCreatedBooking(null);
     setSelected([]);
   };
 
@@ -118,15 +139,45 @@ export default function RegisterTests() {
         throw new Error(data.message || "Booking failed");
       }
 
-      setSuccessMsg("✅ Booking created! Please pay at reception to confirm.");
+      setCreatedBooking(data.data || null);
+      setSuccessMsg("Booking created successfully. You can now pay with eSewa.");
       setSelected([]);
-
-      // ✅ Go back to dashboard (so active tests update)
-      setTimeout(() => navigate("/dashboard"), 900);
     } catch (e) {
       setErr(e.message || "Booking failed");
     } finally {
       setCreating(false);
+    }
+  };
+
+  const handleEsewaPayment = async () => {
+    try {
+      if (!createdBooking?._id) {
+        setErr("Booking not found for payment.");
+        return;
+      }
+
+      const token = localStorage.getItem("token");
+      if (!token) {
+        setErr("You are not logged in. Please login again.");
+        return;
+      }
+
+      const res = await fetch(`/api/payments/esewa/initiate/${createdBooking._id}`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const data = await safeJson(res);
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || "Failed to initiate eSewa payment");
+      }
+
+      submitEsewaForm(data.data);
+    } catch (e) {
+      setErr(e.message || "Failed to initiate eSewa payment");
     }
   };
 
@@ -307,6 +358,15 @@ export default function RegisterTests() {
               {creating ? "Creating..." : "Create booking"}
             </button>
           </div>
+
+          {createdBooking ? (
+            <button
+              onClick={handleEsewaPayment}
+              className="mt-4 w-full rounded-xl px-4 py-2 text-sm font-semibold transition bg-green-600 text-white hover:bg-green-700"
+            >
+              Pay with eSewa
+            </button>
+          ) : null}
 
           <p className="mt-3 text-[11px] text-slate-500">
             Payment will be marked as <b>Pending</b>. Receptionist can update it later.

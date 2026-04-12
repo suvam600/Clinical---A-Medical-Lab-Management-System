@@ -9,7 +9,7 @@ const bookingSchema = new mongoose.Schema(
       required: true,
     },
 
-    // ✅ Each test row has its own status (so Technician can update per row)
+    // Each booked test row
     tests: [
       {
         testId: {
@@ -20,33 +20,74 @@ const bookingSchema = new mongoose.Schema(
         name: { type: String, required: true },
         price: { type: Number, required: true },
 
-        // ✅ per-test workflow status (row status)
+        // Per-test workflow status
         status: {
           type: String,
           enum: ["Awaiting Collection", "Sample Collected", "Processing", "Published"],
           default: "Awaiting Collection",
         },
 
-        // ✅ NEW: result fields (used by TechnicianDashboard "Enter Result")
+        // Result fields
         result: { type: String, default: "" },
         notes: { type: String, default: "" },
         publishedAt: { type: Date },
       },
     ],
 
-    totalAmount: { type: Number, required: true, min: 0 },
+    totalAmount: {
+      type: Number,
+      required: true,
+      min: 0,
+    },
 
-    // ✅ Optional overall status (we can auto-sync this from tests[])
+    // Overall booking workflow status
     bookingStatus: {
       type: String,
       enum: ["Booked", "Sample Collected", "Processing", "Report Published"],
       default: "Booked",
     },
 
+    // Payment status
     paymentStatus: {
       type: String,
-      enum: ["Pending", "Paid", "Refunded"],
+      enum: ["Pending", "Paid", "Failed", "Refunded"],
       default: "Pending",
+    },
+
+    // Optional payment gateway name
+    paymentGateway: {
+      type: String,
+      enum: ["eSewa", "Cash", "None"],
+      default: "None",
+    },
+
+    // eSewa payment details
+    esewa: {
+      transaction_uuid: { type: String, default: "" },
+      product_code: { type: String, default: "" },
+
+      amount: { type: Number, default: 0 },
+      tax_amount: { type: Number, default: 0 },
+      product_service_charge: { type: Number, default: 0 },
+      product_delivery_charge: { type: Number, default: 0 },
+      total_amount: { type: Number, default: 0 },
+
+      signature: { type: String, default: "" },
+      transaction_code: { type: String, default: "" },
+
+      status: {
+        type: String,
+        enum: ["PENDING", "COMPLETE", "FAILED", "CANCELED", "NOT_FOUND", ""],
+        default: "",
+      },
+
+      initiatedAt: { type: Date },
+      paidAt: { type: Date },
+
+      rawResponse: {
+        type: mongoose.Schema.Types.Mixed,
+        default: null,
+      },
     },
   },
   { timestamps: true }
