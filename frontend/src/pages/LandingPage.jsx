@@ -12,6 +12,7 @@ import {
   Menu,
   X,
   Sparkles,
+  Stethoscope,
 } from "lucide-react";
 
 const LandingPage = () => {
@@ -131,6 +132,7 @@ const LandingPage = () => {
             >
               About
             </a>
+            
           </nav>
 
           <div className="flex items-center gap-3">
@@ -182,6 +184,7 @@ const LandingPage = () => {
               >
                 About
               </a>
+            
               <Link
                 to="/login"
                 className="text-sm text-slate-600 hover:text-blue-600"
@@ -232,6 +235,8 @@ const LandingPage = () => {
                 Get started
                 <ArrowRight size={18} />
               </Link>
+
+              
 
               <Link
                 to="/login"
@@ -437,6 +442,8 @@ const LandingPage = () => {
               <ArrowRight size={18} />
             </Link>
 
+           
+
             <Link
               to="/login"
               className="inline-flex items-center justify-center rounded-2xl border-2 border-white px-8 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
@@ -481,6 +488,9 @@ const LandingPage = () => {
                     About
                   </a>
                 </li>
+                <li>
+                 
+                </li>
               </ul>
             </div>
 
@@ -496,6 +506,9 @@ const LandingPage = () => {
                   <Link to="/register" className="transition hover:text-white">
                     Sign up
                   </Link>
+                </li>
+                <li>
+                  
                 </li>
               </ul>
             </div>

@@ -2,7 +2,8 @@
 const express = require("express");
 const bcrypt = require("bcryptjs");
 const User = require("../models/user");
-const Test = require("../models/test"); 
+const Test = require("../models/test");
+const Doctor = require("../models/Doctor"); // ✅ ADDED
 const { authRequired, requireRole } = require("../middleware/authMiddleware");
 
 const router = express.Router();
@@ -14,7 +15,6 @@ const ALLOWED_ROLES = ["patient", "technician", "doctor", "admin"];
 
 /**
  * GET /api/admin/users
- * Optional query: ?role=patient|technician|doctor|admin
  */
 router.get("/users", async (req, res) => {
   try {
@@ -25,7 +25,6 @@ router.get("/users", async (req, res) => {
       .select("_id name email role citizenshipId createdAt")
       .sort({ createdAt: -1 });
 
-    // map _id -> id so frontend can use u.id
     const mapped = users.map((u) => ({
       id: u._id.toString(),
       name: u.name,
@@ -44,7 +43,6 @@ router.get("/users", async (req, res) => {
 
 /**
  * POST /api/admin/users
- * body: {name,email,password,role,citizenshipId(optional)}
  */
 router.post("/users", async (req, res) => {
   try {
@@ -65,20 +63,17 @@ router.post("/users", async (req, res) => {
       return res.status(400).json({ message: "Invalid role." });
     }
 
-    // Citizenship ID rules
     if (role === "patient" && !citizenshipId) {
       return res
         .status(400)
         .json({ message: "citizenshipId is required for patient accounts." });
     }
 
-    // Email must be unique
     const existingEmail = await User.findOne({ email });
     if (existingEmail) {
       return res.status(400).json({ message: "Email is already registered." });
     }
 
-    // CitizenshipId should be unique (if provided)
     if (citizenshipId) {
       const existingCid = await User.findOne({ citizenshipId });
       if (existingCid) {
@@ -117,7 +112,6 @@ router.post("/users", async (req, res) => {
 
 /**
  * DELETE /api/admin/users/:id
- * Prevent deleting self (safety).
  */
 router.delete("/users/:id", async (req, res) => {
   try {
@@ -130,9 +124,15 @@ router.delete("/users/:id", async (req, res) => {
     }
 
     const deleted = await User.findByIdAndDelete(id);
-    if (!deleted) return res.status(404).json({ message: "User not found." });
 
-    res.json({ message: "User deleted successfully." });
+    if (!deleted) {
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    // ✅ FIX: remove doctor profile also
+    await Doctor.deleteMany({ userId: id });
+
+    res.json({ message: "User and doctor profile deleted successfully." });
   } catch (err) {
     console.error("Admin delete user error:", err);
     res.status(500).json({ message: "Server error." });
@@ -140,13 +140,9 @@ router.delete("/users/:id", async (req, res) => {
 });
 
 /* =========================================================
-    TEST MANAGEMENT ROUTES (NEW)
+    TEST MANAGEMENT ROUTES
    ========================================================= */
 
-/**
- * GET /api/admin/tests
- * Returns ALL tests (active + inactive)
- */
 router.get("/tests", async (req, res) => {
   try {
     const tests = await Test.find().sort({ createdAt: -1 });
@@ -157,10 +153,6 @@ router.get("/tests", async (req, res) => {
   }
 });
 
-/**
- * DELETE /api/admin/tests/:id
- * Hard delete (removes from DB)
- */
 router.delete("/tests/:id", async (req, res) => {
   try {
     const { id } = req.params;
@@ -177,10 +169,6 @@ router.delete("/tests/:id", async (req, res) => {
   }
 });
 
-/**
- * PATCH /api/admin/tests/:id/toggle
- * Recommended: enable/disable instead of delete
- */
 router.patch("/tests/:id/toggle", async (req, res) => {
   try {
     const { id } = req.params;

@@ -20,8 +20,11 @@ export default function ConsultDoctor() {
   }, []);
 
   const [loading, setLoading] = useState(true);
-  const [creating, setCreating] = useState(false);
+  const [loadingDoctors, setLoadingDoctors] = useState(true);
+  const [creatingDoctorId, setCreatingDoctorId] = useState("");
   const [consultations, setConsultations] = useState([]);
+  const [doctors, setDoctors] = useState([]);
+  const [selectedSpecialization, setSelectedSpecialization] = useState("");
   const [error, setError] = useState("");
 
   const loadConsultations = async () => {
@@ -57,17 +60,69 @@ export default function ConsultDoctor() {
     }
   };
 
+  const loadDoctors = async (specialization = "") => {
+    try {
+      setLoadingDoctors(true);
+      setError("");
+
+      const token = getToken();
+
+      const url = specialization
+        ? `${API_BASE}/consultations/doctors?specialization=${encodeURIComponent(
+            specialization
+          )}`
+        : `${API_BASE}/consultations/doctors`;
+
+      const res = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const text = await res.text();
+      let data = {};
+      try {
+        data = text ? JSON.parse(text) : {};
+      } catch {
+        data = {};
+      }
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || "Failed to load doctors.");
+      }
+
+      setDoctors(Array.isArray(data.data) ? data.data : []);
+    } catch (err) {
+      setError(err.message || "Failed to load doctors.");
+      setDoctors([]);
+    } finally {
+      setLoadingDoctors(false);
+    }
+  };
+
   useEffect(() => {
     loadConsultations();
+    loadDoctors();
   }, []);
 
   const activeConsultation = useMemo(() => {
     return consultations.find((c) => c.status === "Active") || null;
   }, [consultations]);
 
-  const handleCreateOrOpen = async () => {
+  const specializations = useMemo(() => {
+    const values = doctors.map((d) => d.specialization).filter(Boolean);
+    return Array.from(new Set(values));
+  }, [doctors]);
+
+  const handleSpecializationChange = (e) => {
+    const value = e.target.value;
+    setSelectedSpecialization(value);
+    loadDoctors(value);
+  };
+
+  const handleSelectDoctor = async (doctorId) => {
     try {
-      setCreating(true);
+      setCreatingDoctorId(doctorId);
       setError("");
 
       if (activeConsultation?._id) {
@@ -79,8 +134,10 @@ export default function ConsultDoctor() {
       const res = await fetch(`${API_BASE}/consultations/request`, {
         method: "POST",
         headers: {
+          "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
+        body: JSON.stringify({ doctorId }),
       });
 
       const text = await res.text();
@@ -99,7 +156,7 @@ export default function ConsultDoctor() {
     } catch (err) {
       setError(err.message || "Failed to create consultation.");
     } finally {
-      setCreating(false);
+      setCreatingDoctorId("");
     }
   };
 
@@ -113,9 +170,9 @@ export default function ConsultDoctor() {
                 Consult a doctor
               </h1>
               <p className="mt-2 text-sm text-slate-600 max-w-2xl">
-                Start a secure consultation with the doctor, discuss your lab
-                reports, and send extra report files such as images or PDF
-                documents directly in chat.
+                Choose a doctor based on your health concern, specialization,
+                degree, and experience. You can chat securely and share report
+                files.
               </p>
             </div>
 
@@ -147,9 +204,9 @@ export default function ConsultDoctor() {
             </div>
 
             <div className="rounded-2xl border border-slate-200 bg-slate-50/50 p-4">
-              <p className="text-xs text-slate-500">Attachments supported</p>
+              <p className="text-xs text-slate-500">Doctors available</p>
               <p className="mt-1 text-sm font-semibold text-slate-900">
-                PDF, JPG, PNG
+                {loadingDoctors ? "..." : doctors.length}
               </p>
             </div>
           </div>
@@ -160,39 +217,126 @@ export default function ConsultDoctor() {
             </div>
           ) : null}
 
-          <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50/40 p-5">
-            <h2 className="text-sm font-semibold text-slate-900">
-              Secure doctor consultation
-            </h2>
-            <p className="mt-2 text-sm text-slate-600">
-              Use this feature after receiving your lab reports or whenever you
-              need clarification from the doctor. You can send text messages and
-              upload report files for review.
-            </p>
+          {activeConsultation ? (
+            <div className="mt-6 rounded-2xl border border-green-200 bg-green-50 p-5">
+              <h2 className="text-sm font-semibold text-green-900">
+                You already have an active consultation
+              </h2>
+              <p className="mt-2 text-sm text-green-800">
+                Open your active chat before starting a new one.
+              </p>
 
-            <div className="mt-5 flex flex-wrap gap-3">
               <button
                 type="button"
-                onClick={handleCreateOrOpen}
-                disabled={creating || loading}
-                className="rounded-xl bg-blue-600 text-white px-5 py-2.5 text-sm font-semibold hover:bg-blue-700 disabled:opacity-70 disabled:cursor-not-allowed"
+                onClick={() => navigate(`/consult/${activeConsultation._id}`)}
+                className="mt-4 rounded-xl bg-green-700 text-white px-5 py-2.5 text-sm font-semibold hover:bg-green-800"
               >
-                {creating
-                  ? "Opening..."
-                  : activeConsultation
-                  ? "Open consultation chat"
-                  : "Start consultation"}
+                Open active chat
               </button>
+            </div>
+          ) : null}
 
-              {activeConsultation ? (
-                <button
-                  type="button"
-                  onClick={() => navigate(`/consult/${activeConsultation._id}`)}
-                  className="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
-                >
-                  Resume active chat
-                </button>
-              ) : null}
+          <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50/40 p-5">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div>
+                <h2 className="text-sm font-semibold text-slate-900">
+                  Choose doctor by specialization
+                </h2>
+                <p className="mt-1 text-xs text-slate-500">
+                  Select the type of doctor you need, then choose from the list.
+                </p>
+              </div>
+
+              <select
+                value={selectedSpecialization}
+                onChange={handleSpecializationChange}
+                className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm outline-none focus:border-blue-500"
+              >
+                <option value="">All specializations</option>
+                {specializations.map((spec) => (
+                  <option key={spec} value={spec}>
+                    {spec}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="mt-5">
+              {loadingDoctors ? (
+                <p className="text-sm text-slate-600">Loading doctors...</p>
+              ) : doctors.length === 0 ? (
+                <p className="text-sm text-slate-600">
+                  No doctors available for this specialization.
+                </p>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {doctors.map((doctor) => {
+                    const doctorName =
+                      doctor?.userId?.name || doctor?.name || "Doctor";
+                    const doctorEmail = doctor?.userId?.email || "—";
+
+                    return (
+                      <div
+                        key={doctor._id}
+                        className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <h3 className="text-base font-semibold text-slate-900">
+                              {doctorName}
+                            </h3>
+                            <p className="text-xs text-slate-500 break-all">
+                              {doctorEmail}
+                            </p>
+                          </div>
+
+                          <span className="rounded-full bg-blue-50 text-blue-700 px-3 py-1 text-[11px] font-semibold">
+                            {doctor.specialization || "Doctor"}
+                          </span>
+                        </div>
+
+                        <div className="mt-4 space-y-2 text-sm">
+                          <p>
+                            <span className="text-slate-500">Degree: </span>
+                            <span className="font-medium text-slate-900">
+                              {doctor.degree || "—"}
+                            </span>
+                          </p>
+
+                          <p>
+                            <span className="text-slate-500">Experience: </span>
+                            <span className="font-medium text-slate-900">
+                              {doctor.experience || "—"}
+                            </span>
+                          </p>
+
+                          
+
+                          {doctor.description ? (
+                            <p className="text-xs text-slate-600 leading-5">
+                              {doctor.description}
+                            </p>
+                          ) : null}
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleSelectDoctor(doctor._id)}
+                          disabled={
+                            Boolean(activeConsultation) ||
+                            creatingDoctorId === doctor._id
+                          }
+                          className="mt-5 w-full rounded-xl bg-blue-600 text-white px-5 py-2.5 text-sm font-semibold hover:bg-blue-700 disabled:opacity-70 disabled:cursor-not-allowed"
+                        >
+                          {creatingDoctorId === doctor._id
+                            ? "Opening..."
+                            : "Select doctor"}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         </section>
@@ -204,23 +348,23 @@ export default function ConsultDoctor() {
 
           <div className="mt-4 space-y-3 text-sm text-slate-600">
             <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4">
-              <p className="font-medium text-slate-900">1. Start consultation</p>
+              <p className="font-medium text-slate-900">1. Choose category</p>
               <p className="mt-1 text-xs">
-                Click the consultation button to create your secure doctor chat.
+                Select the specialization based on your report or health issue.
               </p>
             </div>
 
             <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4">
-              <p className="font-medium text-slate-900">2. Share reports</p>
+              <p className="font-medium text-slate-900">2. Select doctor</p>
               <p className="mt-1 text-xs">
-                Send a message and upload PDF or image reports for doctor review.
+                View the doctor profile, degree, experience, and details.
               </p>
             </div>
 
             <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4">
-              <p className="font-medium text-slate-900">3. Receive feedback</p>
+              <p className="font-medium text-slate-900">3. Start chat</p>
               <p className="mt-1 text-xs">
-                The doctor can reply with advice, follow-up notes, and guidance.
+                Send messages and upload PDF or image reports for review.
               </p>
             </div>
           </div>
@@ -243,13 +387,15 @@ export default function ConsultDoctor() {
           <p className="text-sm text-slate-600">Loading...</p>
         ) : consultations.length === 0 ? (
           <p className="text-sm text-slate-600">
-            No consultations yet. Start a consultation to connect with the
-            doctor.
+            No consultations yet. Select a doctor to start your first
+            consultation.
           </p>
         ) : (
           <div className="space-y-3">
             {consultations.map((c) => {
-              const doctorName = c?.doctorId?.name || "Doctor";
+              const doctorName =
+                c?.doctorId?.userId?.name || c?.doctorId?.name || "Doctor";
+              const specialization = c?.doctorId?.specialization || "—";
               const createdText = c?.createdAt
                 ? new Date(c.createdAt).toLocaleString()
                 : "—";
@@ -260,7 +406,12 @@ export default function ConsultDoctor() {
                   className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50/50 px-4 py-4"
                 >
                   <div>
-                    <p className="font-semibold text-slate-900">{doctorName}</p>
+                    <p className="font-semibold text-slate-900">
+                      {doctorName}
+                    </p>
+                    <p className="text-xs text-slate-500 mt-1">
+                      Specialization: {specialization}
+                    </p>
                     <p className="text-xs text-slate-500 mt-1">
                       Consultation ID:{" "}
                       <span className="font-medium text-slate-700">

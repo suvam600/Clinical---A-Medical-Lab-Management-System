@@ -25,6 +25,7 @@ import PatientLayout from "./components/PatientLayout";
 import ConsultDoctor from "./pages/ConsultDoctor";
 import ConsultationChat from "./pages/ConsultationChat";
 import DoctorDashboard from "./pages/DoctorDashboard";
+import ApplyDoctor from "./pages/ApplyDoctor";
 
 const RequireAuth = ({ children, allowedRoles }) => {
   const location = useLocation();
@@ -102,7 +103,9 @@ function App() {
             </RequireAuth>
           }
         />
-
+        {
+          <Route path="/apply-doctor" element={<ApplyDoctor />} />
+        }
         {/* Technician routes */}
         <Route
           path="/technician"

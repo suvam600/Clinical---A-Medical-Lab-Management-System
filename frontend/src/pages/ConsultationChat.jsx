@@ -1,4 +1,3 @@
-// src/pages/ConsultationChat.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { io } from "socket.io-client";
@@ -67,10 +66,13 @@ export default function ConsultationChat() {
 
   const otherPartyName = useMemo(() => {
     if (!consultation) return isDoctor ? "Patient" : "Doctor";
+
     return isDoctor
       ? consultation?.patientId?.name || "Patient"
-      : consultation?.doctorId?.name || "Doctor";
+      : consultation?.doctorId?.userId?.name || "Doctor";
   }, [consultation, isDoctor]);
+
+  const doctorEmail = consultation?.doctorId?.userId?.email || "—";
 
   const scrollToBottom = (behavior = "smooth") => {
     setTimeout(() => {
@@ -89,6 +91,7 @@ export default function ConsultationChat() {
 
   const loadConsultation = async () => {
     const token = getToken();
+
     const res = await fetch(`${API_BASE}/consultations/${consultationId}`, {
       headers: {
         Authorization: `Bearer ${token}`,
@@ -97,6 +100,7 @@ export default function ConsultationChat() {
 
     const textRes = await res.text();
     let data = {};
+
     try {
       data = textRes ? JSON.parse(textRes) : {};
     } catch {
@@ -112,6 +116,7 @@ export default function ConsultationChat() {
 
   const loadMessages = async () => {
     const token = getToken();
+
     const res = await fetch(`${API_BASE}/messages/${consultationId}`, {
       headers: {
         Authorization: `Bearer ${token}`,
@@ -120,6 +125,7 @@ export default function ConsultationChat() {
 
     const textRes = await res.text();
     let data = {};
+
     try {
       data = textRes ? JSON.parse(textRes) : {};
     } catch {
@@ -180,6 +186,7 @@ export default function ConsultationChat() {
 
     return () => {
       mounted = false;
+
       if (socketRef.current) {
         socketRef.current.emit("leave_consultation", consultationId);
         socketRef.current.disconnect();
@@ -215,6 +222,7 @@ export default function ConsultationChat() {
 
       const textRes = await res.text();
       let data = {};
+
       try {
         data = textRes ? JSON.parse(textRes) : {};
       } catch {
@@ -264,6 +272,7 @@ export default function ConsultationChat() {
 
       const textRes = await res.text();
       let data = {};
+
       try {
         data = textRes ? JSON.parse(textRes) : {};
       } catch {
@@ -316,6 +325,7 @@ export default function ConsultationChat() {
 
       const textRes = await res.text();
       let data = {};
+
       try {
         data = textRes ? JSON.parse(textRes) : {};
       } catch {
@@ -339,7 +349,9 @@ export default function ConsultationChat() {
       <div className="min-h-screen bg-slate-50 flex justify-center">
         <div className="w-full max-w-6xl px-4 py-6">
           <div className="rounded-2xl border border-slate-200 bg-white shadow-sm p-6">
-            <p className="text-sm text-slate-600">Loading consultation chat...</p>
+            <p className="text-sm text-slate-600">
+              Loading consultation chat...
+            </p>
           </div>
         </div>
       </div>
@@ -352,6 +364,7 @@ export default function ConsultationChat() {
         <div className="w-full max-w-6xl px-4 py-6">
           <div className="rounded-2xl border border-red-200 bg-red-50 shadow-sm p-6">
             <p className="text-sm text-red-700">Consultation not found.</p>
+
             <button
               onClick={() => navigate(isDoctor ? "/doctor" : "/consult")}
               className="mt-4 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm hover:bg-slate-50"
@@ -377,6 +390,7 @@ export default function ConsultationChat() {
                   <h1 className="text-xl sm:text-2xl font-semibold text-slate-900">
                     Consultation chat
                   </h1>
+
                   <span
                     className={`text-[11px] font-semibold px-3 py-1 rounded-full ${
                       isClosed
@@ -389,11 +403,13 @@ export default function ConsultationChat() {
                 </div>
 
                 <p className="mt-1 text-sm text-slate-600">
-                  Chat with <span className="font-semibold">{otherPartyName}</span>
+                  Chat with{" "}
+                  <span className="font-semibold">{otherPartyName}</span>
                 </p>
 
                 <p className="mt-1 text-xs text-slate-500">
-                  Consultation ID: {String(consultation._id).slice(-8).toUpperCase()}
+                  Consultation ID:{" "}
+                  {String(consultation._id).slice(-8).toUpperCase()}
                 </p>
               </div>
 
@@ -448,7 +464,9 @@ export default function ConsultationChat() {
                         return (
                           <div
                             key={msg._id}
-                            className={`flex ${mine ? "justify-end" : "justify-start"}`}
+                            className={`flex ${
+                              mine ? "justify-end" : "justify-start"
+                            }`}
                           >
                             <div
                               className={`w-fit max-w-[78%] sm:max-w-[68%] rounded-2xl px-4 py-3 shadow-sm ${
@@ -516,6 +534,7 @@ export default function ConsultationChat() {
                           </div>
                         );
                       })}
+
                       <div ref={bottomRef} />
                     </div>
                   )}
@@ -543,7 +562,9 @@ export default function ConsultationChat() {
                           id="consultation-file-input"
                           type="file"
                           accept=".pdf,image/png,image/jpeg,image/jpg,image/webp"
-                          onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
+                          onChange={(e) =>
+                            setSelectedFile(e.target.files?.[0] || null)
+                          }
                           className="block text-sm text-slate-600"
                         />
 
@@ -590,10 +611,29 @@ export default function ConsultationChat() {
                 <p className="text-xs text-slate-500">
                   {isDoctor ? "Patient name" : "Doctor name"}
                 </p>
+
                 <p className="mt-1 font-semibold text-slate-900">
                   {otherPartyName}
                 </p>
               </div>
+
+              {!isDoctor ? (
+                <>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4">
+                    <p className="text-xs text-slate-500">Specialization</p>
+                    <p className="mt-1 font-semibold text-slate-900">
+                      {consultation?.doctorId?.specialization || "—"}
+                    </p>
+                  </div>
+
+                  <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4">
+                    <p className="text-xs text-slate-500">Degree</p>
+                    <p className="mt-1 font-semibold text-slate-900">
+                      {consultation?.doctorId?.degree || "—"}
+                    </p>
+                  </div>
+                </>
+              ) : null}
 
               <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4">
                 <p className="text-xs text-slate-500">Created</p>
@@ -629,7 +669,7 @@ export default function ConsultationChat() {
                 <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-4">
                   <p className="text-xs text-slate-500">Doctor email</p>
                   <p className="mt-1 font-semibold text-slate-900 break-all">
-                    {consultation?.doctorId?.email || "—"}
+                    {doctorEmail}
                   </p>
                 </div>
               )}

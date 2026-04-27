@@ -1,6 +1,6 @@
 // src/pages/Register.jsx
 import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import AuthCard from "../components/AuthCard";
 import Input from "../components/Input";
 import bg from "../assets/medical-bg.svg";
@@ -15,9 +15,11 @@ const Register = () => {
     password: "",
     confirmPassword: "",
   });
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
+
   const navigate = useNavigate();
 
   const handleChange = (e) => {
@@ -51,6 +53,7 @@ const Register = () => {
 
       const text = await res.text();
       let data = {};
+
       try {
         data = text ? JSON.parse(text) : {};
       } catch {
@@ -66,10 +69,8 @@ const Register = () => {
           "Registration successful. Enter the verification code sent to your email."
       );
 
-      // Save email so verify page can use it
       localStorage.setItem("verifyEmail", form.email);
 
-      // Redirect to verify code page
       setTimeout(() => navigate("/verify-code"), 1500);
     } catch (err) {
       setError(err.message || "Something went wrong.");
@@ -80,7 +81,6 @@ const Register = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-sky-50 to-white text-slate-900 flex">
-      {/* Left visual side */}
       <div className="hidden lg:flex flex-1 relative overflow-hidden">
         <div className="absolute inset-0">
           <img
@@ -97,10 +97,12 @@ const Register = () => {
               <span className="h-2 w-2 rounded-full bg-blue-500"></span>
               Patient registration
             </div>
+
             <h2 className="text-4xl xl:text-5xl font-semibold text-slate-900 leading-tight">
               Create your <span className="text-blue-600">Clinical</span>{" "}
               account
             </h2>
+
             <p className="mt-4 text-sm xl:text-base text-slate-700 max-w-lg">
               Register once using your email and Citizenship ID to access lab
               tests, reports and consultations.
@@ -109,7 +111,6 @@ const Register = () => {
         </div>
       </div>
 
-      {/* Right form side */}
       <div className="flex-1 flex items-center justify-center px-6 py-10 sm:px-8">
         <AuthCard
           title="Create your account"
@@ -128,6 +129,7 @@ const Register = () => {
               value={form.name}
               onChange={handleChange}
             />
+
             <Input
               label="Email"
               name="email"
@@ -137,6 +139,7 @@ const Register = () => {
               value={form.email}
               onChange={handleChange}
             />
+
             <Input
               label="Citizenship ID"
               name="citizenshipId"
@@ -146,6 +149,7 @@ const Register = () => {
               value={form.citizenshipId}
               onChange={handleChange}
             />
+
             <Input
               label="Password"
               name="password"
@@ -155,6 +159,7 @@ const Register = () => {
               value={form.password}
               onChange={handleChange}
             />
+
             <Input
               label="Confirm password"
               name="confirmPassword"
@@ -190,6 +195,8 @@ const Register = () => {
             By creating an account you agree to Clinical&apos;s terms and
             privacy policy.
           </p>
+
+         
         </AuthCard>
       </div>
     </div>

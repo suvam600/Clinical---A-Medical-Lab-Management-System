@@ -1,4 +1,3 @@
-// backend/routes/messages.js
 const express = require("express");
 const path = require("path");
 const fs = require("fs");
@@ -47,18 +46,35 @@ const upload = multer({
   storage,
   fileFilter,
   limits: {
-    fileSize: 10 * 1024 * 1024, // 10 MB
+    fileSize: 10 * 1024 * 1024,
   },
 });
 
 // Helper: verify current user belongs to consultation
 async function canAccessConsultation(user, consultationId) {
-  const consultation = await Consultation.findById(consultationId);
+  const consultation = await Consultation.findById(consultationId).populate({
+    path: "doctorId",
+    populate: { path: "userId" },
+  });
+
   if (!consultation) return { ok: false, consultation: null };
 
   const uid = String(user.userId);
-  const isPatient = String(consultation.patientId) === uid;
-  const isDoctor = String(consultation.doctorId) === uid;
+
+  const patientIdValue =
+    consultation.patientId && consultation.patientId._id
+      ? consultation.patientId._id
+      : consultation.patientId;
+
+  const doctorUserIdValue =
+    consultation.doctorId &&
+    consultation.doctorId.userId &&
+    consultation.doctorId.userId._id
+      ? consultation.doctorId.userId._id
+      : consultation.doctorId?.userId;
+
+  const isPatient = String(patientIdValue) === uid;
+  const isDoctor = String(doctorUserIdValue) === uid;
 
   if (!isPatient && !isDoctor) {
     return { ok: false, consultation };
@@ -76,21 +92,31 @@ router.get("/:consultationId", authRequired, async (req, res) => {
     const { consultationId } = req.params;
 
     const access = await canAccessConsultation(req.user, consultationId);
+
     if (!access.consultation) {
-      return res.status(404).json({ success: false, message: "Consultation not found." });
-    }
-    if (!access.ok) {
-      return res.status(403).json({ success: false, message: "Forbidden." });
+      return res.status(404).json({
+        success: false,
+        message: "Consultation not found.",
+      });
     }
 
-    const messages = await Message.find({ consultationId }).sort({ createdAt: 1 });
+    if (!access.ok) {
+      return res.status(403).json({
+        success: false,
+        message: "Forbidden.",
+      });
+    }
+
+    const messages = await Message.find({ consultationId }).sort({
+      createdAt: 1,
+    });
 
     return res.json({
       success: true,
       data: messages,
     });
   } catch (err) {
-    console.error("❌ Get messages error:", err);
+    console.error("Get messages error:", err);
     return res.status(500).json({
       success: false,
       message: err?.message || "Failed to load messages.",
@@ -115,11 +141,19 @@ router.post("/:consultationId/text", authRequired, async (req, res) => {
     }
 
     const access = await canAccessConsultation(req.user, consultationId);
+
     if (!access.consultation) {
-      return res.status(404).json({ success: false, message: "Consultation not found." });
+      return res.status(404).json({
+        success: false,
+        message: "Consultation not found.",
+      });
     }
+
     if (!access.ok) {
-      return res.status(403).json({ success: false, message: "Forbidden." });
+      return res.status(403).json({
+        success: false,
+        message: "Forbidden.",
+      });
     }
 
     const message = await Message.create({
@@ -136,7 +170,7 @@ router.post("/:consultationId/text", authRequired, async (req, res) => {
       data: message,
     });
   } catch (err) {
-    console.error("❌ Save text message error:", err);
+    console.error("Save text message error:", err);
     return res.status(500).json({
       success: false,
       message: err?.message || "Failed to save message.",
@@ -157,11 +191,19 @@ router.post(
       const { consultationId } = req.params;
 
       const access = await canAccessConsultation(req.user, consultationId);
+
       if (!access.consultation) {
-        return res.status(404).json({ success: false, message: "Consultation not found." });
+        return res.status(404).json({
+          success: false,
+          message: "Consultation not found.",
+        });
       }
+
       if (!access.ok) {
-        return res.status(403).json({ success: false, message: "Forbidden." });
+        return res.status(403).json({
+          success: false,
+          message: "Forbidden.",
+        });
       }
 
       if (!req.file) {
@@ -173,7 +215,6 @@ router.post(
 
       const mime = req.file.mimetype || "";
       const fileType = mime === "application/pdf" ? "pdf" : "image";
-
       const fileUrl = `/uploads/${req.file.filename}`;
 
       const message = await Message.create({
@@ -190,7 +231,7 @@ router.post(
         data: message,
       });
     } catch (err) {
-      console.error("❌ Upload file message error:", err);
+      console.error("Upload file message error:", err);
       return res.status(500).json({
         success: false,
         message: err?.message || "Failed to upload file.",
