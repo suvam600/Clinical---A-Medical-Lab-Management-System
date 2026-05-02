@@ -241,7 +241,7 @@ export default function PatientLayout() {
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-b from-blue-50 via-sky-50 to-blue-100">
-      <header className="w-full border-b border-slate-200 bg-white/80 backdrop-blur relative">
+      <header className="w-full border-b border-slate-200 bg-white/80 backdrop-blur relative z-50">
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-xl bg-blue-600 flex items-center justify-center text-white font-bold text-lg shadow-sm">
@@ -268,7 +268,7 @@ export default function PatientLayout() {
             </button>
 
             {showSettings && (
-              <div className="absolute right-0 top-12 z-50 w-60 rounded-2xl border border-slate-200 bg-white shadow-xl p-2">
+              <div className="absolute right-0 top-12 z-[9999] w-60 rounded-2xl border border-slate-200 bg-white shadow-xl p-2">
                 <button
                   onClick={() => openModal("profile")}
                   className="w-full text-left rounded-xl px-4 py-2.5 text-sm hover:bg-slate-100"
@@ -290,9 +290,7 @@ export default function PatientLayout() {
                   Terms & conditions
                 </button>
 
-                <button className="w-full text-left rounded-xl px-4 py-2.5 text-sm hover:bg-slate-100">
-                  Notification settings
-                </button>
+                
 
                 <div className="my-2 border-t border-slate-200" />
 

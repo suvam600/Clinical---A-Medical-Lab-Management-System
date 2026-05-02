@@ -3,7 +3,9 @@ const router = express.Router();
 
 const Consultation = require("../models/consultation");
 const Doctor = require("../models/Doctor");
+const User = require("../models/user");
 const { authRequired } = require("../middleware/authMiddleware");
+const { sendEmail } = require("../utils/sendEmail");
 
 /**
  * Helper: check whether current user belongs to consultation
@@ -25,10 +27,7 @@ function canAccessConsultation(user, consultation) {
       ? consultation.doctorId.userId._id
       : consultation.doctorId?.userId || consultation.doctorId;
 
-  return (
-    String(patientIdValue) === uid ||
-    String(doctorUserIdValue) === uid
-  );
+  return String(patientIdValue) === uid || String(doctorUserIdValue) === uid;
 }
 
 /**
@@ -83,7 +82,10 @@ router.post("/request", authRequired, async (req, res) => {
       });
     }
 
-    const doctor = await Doctor.findById(doctorId);
+    const doctor = await Doctor.findById(doctorId).populate(
+      "userId",
+      "name email role"
+    );
 
     if (!doctor) {
       return res.status(404).json({
@@ -128,6 +130,64 @@ router.post("/request", authRequired, async (req, res) => {
           select: "name email role",
         },
       });
+
+    try {
+      const patient = await User.findById(req.user.userId).select(
+        "name email citizenshipId"
+      );
+
+      const doctorEmail = doctor.userId?.email;
+
+      if (doctorEmail) {
+        const subject = "Clinical - New Consultation Request";
+
+        const html = `
+          <div style="font-family: Arial, sans-serif; background-color: #f4f6f8; padding: 40px;">
+            <div style="max-width: 500px; margin: auto; background: #ffffff; border-radius: 10px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.08);">
+
+              <div style="background: linear-gradient(135deg, #4CAF50, #2E7D32); color: white; padding: 20px; text-align: center;">
+                <h2 style="margin: 0;">Clinical</h2>
+                <p style="margin: 5px 0 0;">Medical Lab Management System</p>
+              </div>
+
+              <div style="padding: 30px;">
+                <h3 style="color: #333;">New Consultation Request</h3>
+
+                <p style="color: #555; font-size: 14px;">
+                  A patient has requested a doctor consultation.
+                </p>
+
+                <p style="margin: 15px 0; font-size: 14px;">
+                  <strong>Patient Name:</strong> ${patient?.name || "Patient"}
+                </p>
+
+                <p style="margin: 15px 0; font-size: 14px;">
+                  <strong>Patient Email:</strong> ${patient?.email || "N/A"}
+                </p>
+
+                <p style="margin: 15px 0; font-size: 14px;">
+                  <strong>Citizenship ID:</strong> ${patient?.citizenshipId || "N/A"}
+                </p>
+
+                <p style="color: #555; font-size: 14px;">
+                  Please log in to the Clinical system to view this consultation.
+                </p>
+              </div>
+
+              <div style="background: #f4f6f8; padding: 15px; text-align: center; font-size: 12px; color: #999;">
+                © ${new Date().getFullYear()} Clinical. All rights reserved.
+              </div>
+
+            </div>
+          </div>
+        `;
+
+        await sendEmail(doctorEmail, subject, html);
+        console.log("Doctor consultation email sent to:", doctorEmail);
+      }
+    } catch (emailErr) {
+      console.error("Doctor consultation email failed:", emailErr.message);
+    }
 
     return res.status(201).json({
       success: true,

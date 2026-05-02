@@ -69,7 +69,7 @@ export default function ApplyDoctor() {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-sky-50 to-white px-4 py-10">
       <div className="mx-auto max-w-4xl">
         <div className="mb-6">
-          <Link to="/" className="text-sm font-semibold text-blue-600 hover:underline">
+          <Link to="/dashboard" className="text-sm font-semibold text-blue-600 hover:underline">
             ← Back to home
           </Link>
         </div>

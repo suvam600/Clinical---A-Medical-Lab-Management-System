@@ -601,7 +601,7 @@ export default function ConsultationChat() {
             </div>
           </section>
 
-          <aside className="rounded-2xl border border-slate-200 bg-white shadow-sm p-5 h-fit xl:sticky xl:top-6">
+          <aside className="relative z-0 rounded-2xl border border-slate-200 bg-white shadow-sm p-5 h-fit xl:sticky xl:top-6">
             <h2 className="text-sm font-semibold text-slate-900">
               Consultation details
             </h2>

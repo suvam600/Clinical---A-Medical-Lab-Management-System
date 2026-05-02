@@ -69,7 +69,7 @@ const LandingPage = () => {
 
   const testimonials = [
     {
-      name: "Doctor",
+      name: "Dr.Arjun Dhakal",
       role: "Chief Medical Officer",
       content:
         "Clinical makes consultation handling and report access much faster for both staff and patients.",
@@ -83,7 +83,7 @@ const LandingPage = () => {
       rating: 5,
     },
     {
-      name: "Anjal Basnet",
+      name: "Dr.Anjal Basnet",
       role: "Lab Director",
       content:
         "The system improves coordination between departments and reduces delays in patient communication.",

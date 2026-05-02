@@ -17,11 +17,26 @@ async function safeJson(res) {
 function submitEsewaForm(paymentData) {
   const form = document.createElement("form");
   form.method = "POST";
-  form.action = paymentData.form_url;
+  form.action = "https://rc-epay.esewa.com.np/api/epay/main/v2/form";
+  form.target = "_self";
 
-  Object.entries(paymentData).forEach(([key, value]) => {
-    if (key === "form_url") return;
+  const fields = {
+    amount: String(paymentData.amount),
+    tax_amount: "0",
+    total_amount: String(paymentData.total_amount),
+    transaction_uuid: paymentData.transaction_uuid,
+    product_code: "EPAYTEST",
+    product_service_charge: "0",
+    product_delivery_charge: "0",
+    success_url: paymentData.success_url,
+    failure_url: paymentData.failure_url,
+    signed_field_names: "total_amount,transaction_uuid,product_code",
+    signature: paymentData.signature,
+  };
 
+  console.log("Sending eSewa form data:", fields);
+
+  Object.entries(fields).forEach(([key, value]) => {
     const input = document.createElement("input");
     input.type = "hidden";
     input.name = key;
@@ -37,14 +52,14 @@ export default function RegisterTests() {
   const navigate = useNavigate();
 
   const [tests, setTests] = useState([]);
-  const [selected, setSelected] = useState([]); // array of test._id
+  const [selected, setSelected] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
   const [q, setQ] = useState("");
+  const [filter, setFilter] = useState("all");
   const [sort, setSort] = useState("name-asc");
   const [creating, setCreating] = useState(false);
   const [successMsg, setSuccessMsg] = useState("");
-  const [createdBooking, setCreatedBooking] = useState(null);
 
   useEffect(() => {
     const loadTests = async () => {
@@ -58,6 +73,7 @@ export default function RegisterTests() {
         if (!res.ok || !data.success) {
           throw new Error(data.message || "Failed to load tests");
         }
+
         setTests(data.data || []);
       } catch (e) {
         setErr(e.message || "Failed to load tests");
@@ -73,14 +89,37 @@ export default function RegisterTests() {
     const query = q.trim().toLowerCase();
     let list = [...tests];
 
-    if (query) list = list.filter((t) => t.name?.toLowerCase().includes(query));
+    if (query) {
+      list = list.filter((t) => t.name?.toLowerCase().includes(query));
+    }
+
+    if (filter !== "all") {
+      list = list.filter((t) => {
+        const sample = t.sampleType?.toLowerCase() || "";
+        const name = t.name?.toLowerCase() || "";
+
+        if (filter === "blood") {
+          return sample.includes("blood") || name.includes("blood");
+        }
+
+        if (filter === "urine") {
+          return sample.includes("urine") || name.includes("urine");
+        }
+
+        if (filter === "swab") {
+          return sample.includes("swab") || name.includes("swab");
+        }
+
+        return true;
+      });
+    }
 
     if (sort === "name-asc") list.sort((a, b) => a.name.localeCompare(b.name));
     if (sort === "price-asc") list.sort((a, b) => (a.price || 0) - (b.price || 0));
     if (sort === "price-desc") list.sort((a, b) => (b.price || 0) - (a.price || 0));
 
     return list;
-  }, [tests, q, sort]);
+  }, [tests, q, filter, sort]);
 
   const selectedTests = useMemo(() => {
     const setIds = new Set(selected);
@@ -94,7 +133,6 @@ export default function RegisterTests() {
   const toggleSelect = (id) => {
     setSuccessMsg("");
     setErr("");
-    setCreatedBooking(null);
     setSelected((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
     );
@@ -103,11 +141,10 @@ export default function RegisterTests() {
   const clearSelection = () => {
     setErr("");
     setSuccessMsg("");
-    setCreatedBooking(null);
     setSelected([]);
   };
 
-  const createBooking = async () => {
+  const handleEsewaPayment = async () => {
     try {
       setCreating(true);
       setErr("");
@@ -124,7 +161,8 @@ export default function RegisterTests() {
         return;
       }
 
-      const res = await fetch("/api/bookings", {
+      // STEP 1: Create booking
+      const bookingRes = await fetch("/api/bookings", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -133,51 +171,37 @@ export default function RegisterTests() {
         body: JSON.stringify({ testIds: selected }),
       });
 
-      const data = await safeJson(res);
+      const bookingData = await safeJson(bookingRes);
 
-      if (!res.ok || !data.success) {
-        throw new Error(data.message || "Booking failed");
+      if (!bookingRes.ok || !bookingData.success) {
+        throw new Error(bookingData.message || "Booking failed");
       }
 
-      setCreatedBooking(data.data || null);
-      setSuccessMsg("Booking created successfully. You can now pay with eSewa.");
-      setSelected([]);
-    } catch (e) {
-      setErr(e.message || "Booking failed");
-    } finally {
-      setCreating(false);
-    }
-  };
+      const bookingId = bookingData.data?._id;
 
-  const handleEsewaPayment = async () => {
-    try {
-      if (!createdBooking?._id) {
-        setErr("Booking not found for payment.");
-        return;
+      if (!bookingId) {
+        throw new Error("Booking ID not found.");
       }
 
-      const token = localStorage.getItem("token");
-      if (!token) {
-        setErr("You are not logged in. Please login again.");
-        return;
-      }
-
-      const res = await fetch(`/api/payments/esewa/initiate/${createdBooking._id}`, {
+      // STEP 2: Initiate eSewa payment
+      const paymentRes = await fetch(`/api/payments/esewa/initiate/${bookingId}`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
         },
       });
 
-      const data = await safeJson(res);
+      const paymentData = await safeJson(paymentRes);
 
-      if (!res.ok || !data.success) {
-        throw new Error(data.message || "Failed to initiate eSewa payment");
+      if (!paymentRes.ok || !paymentData.success) {
+        throw new Error(paymentData.message || "Failed to initiate eSewa payment");
       }
 
-      submitEsewaForm(data.data);
+      // STEP 3: Submit to eSewa
+      submitEsewaForm(paymentData.data);
     } catch (e) {
       setErr(e.message || "Failed to initiate eSewa payment");
+      setCreating(false);
     }
   };
 
@@ -189,7 +213,7 @@ export default function RegisterTests() {
             Register for tests
           </h1>
           <p className="text-sm text-slate-600 mt-1">
-            Select multiple tests and create a booking.
+            Select multiple tests and pay with eSewa to confirm booking.
           </p>
         </div>
 
@@ -203,15 +227,27 @@ export default function RegisterTests() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* LEFT: Test list */}
         <div className="lg:col-span-2 rounded-2xl border border-blue-100 bg-white shadow-sm p-5">
           <div className="flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between">
-            <input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Search tests (e.g., CBC, Vitamin D)"
-              className="w-full sm:w-80 rounded-xl border border-slate-200 px-4 py-2 text-sm outline-none focus:border-blue-400"
-            />
+            <div className="flex gap-2 w-full sm:w-auto">
+              <input
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Search tests (e.g., CBC, Vitamin D)"
+                className="w-full sm:w-80 rounded-xl border border-slate-200 px-4 py-2 text-sm outline-none focus:border-blue-400"
+              />
+
+              <select
+                value={filter}
+                onChange={(e) => setFilter(e.target.value)}
+                className="rounded-xl border border-slate-200 px-3 py-2 text-sm bg-white outline-none focus:border-blue-400"
+              >
+                <option value="all">Filter: All</option>
+                <option value="blood">Blood Tests</option>
+                <option value="urine">Urine Tests</option>
+                <option value="swab">Swab Tests</option>
+              </select>
+            </div>
 
             <select
               value={sort}
@@ -247,6 +283,7 @@ export default function RegisterTests() {
               <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
                 {filtered.map((t) => {
                   const isSelected = selected.includes(t._id);
+
                   return (
                     <button
                       type="button"
@@ -264,10 +301,13 @@ export default function RegisterTests() {
                             {t.name}
                           </div>
                           <div className="text-sm text-slate-500 mt-1">
-                            Sample: <span className="text-slate-700">{t.sampleType}</span>
+                            Sample:{" "}
+                            <span className="text-slate-700">{t.sampleType}</span>
                             <span className="mx-2">•</span>
                             Result in:{" "}
-                            <span className="text-slate-700">{t.turnaroundTime}</span>
+                            <span className="text-slate-700">
+                              {t.turnaroundTime}
+                            </span>
                           </div>
                         </div>
 
@@ -307,10 +347,9 @@ export default function RegisterTests() {
           )}
         </div>
 
-        {/* RIGHT: Selection summary */}
         <div className="rounded-2xl border border-slate-200 bg-white shadow-sm p-5">
           <h2 className="text-sm font-semibold text-slate-900">Selected tests</h2>
-          <p className="text-xs text-slate-500 mt-1">Review and create booking.</p>
+          <p className="text-xs text-slate-500 mt-1">Review and pay to confirm.</p>
 
           <div className="mt-4 space-y-2 text-sm">
             {selectedTests.length === 0 ? (
@@ -321,8 +360,12 @@ export default function RegisterTests() {
                   key={t._id}
                   className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2"
                 >
-                  <div className="text-slate-800 text-xs font-medium">{t.name}</div>
-                  <div className="text-slate-900 text-xs font-semibold">Rs. {t.price}</div>
+                  <div className="text-slate-800 text-xs font-medium">
+                    {t.name}
+                  </div>
+                  <div className="text-slate-900 text-xs font-semibold">
+                    Rs. {t.price}
+                  </div>
                 </div>
               ))
             )}
@@ -336,9 +379,9 @@ export default function RegisterTests() {
           <div className="mt-4 flex gap-2">
             <button
               onClick={clearSelection}
-              disabled={selected.length === 0}
+              disabled={selected.length === 0 || creating}
               className={`w-1/2 rounded-xl px-4 py-2 text-sm font-medium border transition ${
-                selected.length === 0
+                selected.length === 0 || creating
                   ? "border-slate-200 text-slate-400 cursor-not-allowed"
                   : "border-slate-200 text-slate-700 hover:border-blue-400"
               }`}
@@ -347,29 +390,20 @@ export default function RegisterTests() {
             </button>
 
             <button
-              onClick={createBooking}
+              onClick={handleEsewaPayment}
               disabled={creating || selected.length === 0}
               className={`w-1/2 rounded-xl px-4 py-2 text-sm font-semibold transition ${
                 creating || selected.length === 0
-                  ? "bg-blue-200 text-white cursor-not-allowed"
-                  : "bg-blue-600 text-white hover:bg-blue-700"
+                  ? "bg-green-200 text-white cursor-not-allowed"
+                  : "bg-green-600 text-white hover:bg-green-700"
               }`}
             >
-              {creating ? "Creating..." : "Create booking"}
+              {creating ? "Processing..." : "Pay with eSewa"}
             </button>
           </div>
 
-          {createdBooking ? (
-            <button
-              onClick={handleEsewaPayment}
-              className="mt-4 w-full rounded-xl px-4 py-2 text-sm font-semibold transition bg-green-600 text-white hover:bg-green-700"
-            >
-              Pay with eSewa
-            </button>
-          ) : null}
-
           <p className="mt-3 text-[11px] text-slate-500">
-            Payment will be marked as <b>Pending</b>. Receptionist can update it later.
+            Booking will be created when you proceed to payment.
           </p>
         </div>
       </div>

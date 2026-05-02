@@ -5,7 +5,9 @@ const multer = require("multer");
 
 const Message = require("../models/message");
 const Consultation = require("../models/consultation");
+const User = require("../models/user");
 const { authRequired } = require("../middleware/authMiddleware");
+const { sendEmail } = require("../utils/sendEmail");
 
 const router = express.Router();
 
@@ -85,7 +87,6 @@ async function canAccessConsultation(user, consultationId) {
 
 /**
  * GET /api/messages/:consultationId
- * Fetch all messages for one consultation
  */
 router.get("/:consultationId", authRequired, async (req, res) => {
   try {
@@ -126,7 +127,6 @@ router.get("/:consultationId", authRequired, async (req, res) => {
 
 /**
  * POST /api/messages/:consultationId/text
- * Save a normal text message
  */
 router.post("/:consultationId/text", authRequired, async (req, res) => {
   try {
@@ -165,6 +165,45 @@ router.post("/:consultationId/text", authRequired, async (req, res) => {
       fileType: "none",
     });
 
+    // ============================
+    // Notify doctor when patient sends message
+    // ============================
+    if (req.user.role === "patient") {
+      try {
+        const consultation = access.consultation;
+
+        const doctorUserId =
+          consultation.doctorId?.userId?._id || consultation.doctorId?.userId;
+
+        const doctor = await User.findById(doctorUserId).select("email name");
+
+        const patient = await User.findById(req.user.userId).select("name");
+
+        if (doctor?.email) {
+          const subject = "Clinical - New Message from Patient";
+
+          const html = `
+            <div style="font-family: Arial, sans-serif; padding: 20px;">
+              <h3>New Message Received</h3>
+
+              <p><strong>Patient:</strong> ${patient?.name || "Patient"}</p>
+
+              <p><strong>Message:</strong></p>
+              <p>${text}</p>
+
+              <p>Please log in to respond.</p>
+            </div>
+          `;
+
+          await sendEmail(doctor.email, subject, html);
+
+          console.log("Doctor message email sent to:", doctor.email);
+        }
+      } catch (emailErr) {
+        console.error("Doctor message email failed:", emailErr.message);
+      }
+    }
+
     return res.status(201).json({
       success: true,
       data: message,
@@ -180,7 +219,6 @@ router.post("/:consultationId/text", authRequired, async (req, res) => {
 
 /**
  * POST /api/messages/:consultationId/file
- * Upload PDF/image and save as message
  */
 router.post(
   "/:consultationId/file",
